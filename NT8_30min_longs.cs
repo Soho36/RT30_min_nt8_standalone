@@ -13,6 +13,9 @@ namespace NinjaTrader.NinjaScript.Strategies
     {
         private Order longOrder;
         private double pendingStopPrice;
+        private double entryPrice;
+        private double riskPerTrade;   // entry - stop
+        private bool inTrade;          // track live trade
 
         protected override void OnStateChange()
         {
@@ -33,6 +36,9 @@ namespace NinjaTrader.NinjaScript.Strategies
             {
                 longOrder = null;
                 pendingStopPrice = 0;
+                entryPrice = 0;
+                riskPerTrade = 0;
+                inTrade = false;
                 Print("=== Strategy entering REALTIME mode ===");
             }
         }
@@ -46,18 +52,31 @@ namespace NinjaTrader.NinjaScript.Strategies
             Print($"[{Time[0]}] OnBarUpdate | O={Open[0]} H={High[0]} L={Low[0]} C={Close[0]} " +
                   $"Ask={GetCurrentAsk()} Bid={GetCurrentBid()} Pos={Position.MarketPosition}");
 
-            // Skip if we are already in a trade
+            // --- Flatten check ---
+            if (inTrade && Position.MarketPosition == MarketPosition.Long)
+            {
+                double rr = (Close[0] - entryPrice) / riskPerTrade;
+                if (rr >= 1.0)   // 1:1 reached
+                {
+                    Print($"[{Time[0]}] >>> Flattening LONG @ {Close[0]} (RR={rr:F2})");
+                    ExitLong("RR_Flat", "Long1");
+                    inTrade = false;   // reset
+                    return;            // stop processing further this bar
+                }
+            }
+
+            // --- Entry setup ---
             if (Position.MarketPosition != MarketPosition.Flat)
             {
                 Print($"[{Time[0]}] Skipping — already in position ({Position.MarketPosition})");
                 return;
             }
 
-            // Only act on red candles (Close < Open)
-            if (Close[0] < Open[0])
+            if (Close[0] < Open[0]) // red candle
             {
-                double entryPrice = High[0] + TickSize;     // stop entry above the high
-                pendingStopPrice = Low[0] - TickSize;       // SL under the low
+                entryPrice = High[0] + TickSize;     // stop entry above the high
+                pendingStopPrice = Low[0] - TickSize; // SL under the low
+                riskPerTrade = entryPrice - pendingStopPrice;
 
                 // Replace only if price changed
                 if (longOrder != null && longOrder.OrderState == OrderState.Working)
@@ -98,13 +117,14 @@ namespace NinjaTrader.NinjaScript.Strategies
                 double slPrice = pendingStopPrice;
                 Print($"[{time}] [SL SET] Stop-loss placed @ {slPrice}");
 
-                // Managed-style stop loss
                 SetStopLoss("Long1", CalculationMode.Price, slPrice, false);
+
+                inTrade = true; // mark active trade
             }
 
-            // Flat cleanup (mostly just debug info in managed mode)
             if (Position.MarketPosition == MarketPosition.Flat)
             {
+                inTrade = false;
                 Print($"[{time}] Flat → no active SL");
             }
         }
