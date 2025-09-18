@@ -47,8 +47,8 @@ namespace NinjaTrader.NinjaScript.Strategies
             if (State != State.Realtime) return;
 
             // Debug info
-            Print($"[{Time[0]}] OnBarUpdate | O={Open[0]} H={High[0]} L={Low[0]} C={Close[0]} " +
-                  $"Ask={GetCurrentAsk()} Bid={GetCurrentBid()} Pos={Position.MarketPosition}");
+            Print($"[{Time[0]}] OnBarUpdate | H={High[0]} L={Low[0]}" +
+                  $" Pos={Position.MarketPosition}");
 
             // 🔹 Flatten if 1:1 R/R reached
             if (Position.MarketPosition == MarketPosition.Long)
