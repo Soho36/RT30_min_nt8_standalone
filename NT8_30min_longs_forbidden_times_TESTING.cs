@@ -65,8 +65,11 @@ namespace NinjaTrader.NinjaScript.Strategies
             // Debug info
             Print($"[{Time[0]}] OnBarUpdate | H={High[0]} L={Low[0]} Pos={Position.MarketPosition}");
 
-            // 🟠 Cancel pending order if in forbidden window & price too close
-            if (InForbiddenWindow() && longOrder != null && longOrder.OrderState == OrderState.Working)
+            // 🟠 Cancel Buy-stop pending order if in forbidden window & price too close
+            if (InForbiddenWindow()
+            && longOrder != null
+            && longOrder.OrderState == OrderState.Working
+            && longOrder.OrderAction == OrderAction.Buy)
             {
                 double distance = Math.Abs(Close[0] - longOrder.StopPrice);
                 if (distance < cancelDistance)
@@ -107,6 +110,7 @@ namespace NinjaTrader.NinjaScript.Strategies
 
                 // ✅ Submit Buy Stop Limit (normal case)
                 longOrder = EnterLongStopLimit(0, true, 1, stopPrice, stopPrice, "Long1");
+
                 Print($"[{Time[0]}] >>> Submitted new LONG stop-limit @ {entryPrice}, SL @ {pendingStopPrice}");
             }
         }
