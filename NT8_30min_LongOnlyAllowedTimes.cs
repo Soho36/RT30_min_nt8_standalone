@@ -18,7 +18,7 @@ namespace NinjaTrader.NinjaScript.Strategies
         private double riskPerTrade;
         private double cancelDistance;
 
-        // 🕐 Define allowed trading windows (add as many as you like)
+        // 🕐 Define allowed trading windows
         private List<(TimeSpan Start, TimeSpan End)> allowedWindows = new List<(TimeSpan, TimeSpan)>
         {
             (new TimeSpan(8, 30, 0), new TimeSpan(10, 0, 0)),   // 08:30–10:00
@@ -42,14 +42,14 @@ namespace NinjaTrader.NinjaScript.Strategies
             if (State == State.SetDefaults)
             {
                 Name = "NT8LongOnlyAllowedTimes";
-                Calculate = Calculate.OnBarClose;
+                Calculate = Calculate.OnPriceChange;  // Hybrid mode: tick-based cancel + IsFirstTickOfBar filter
                 EntriesPerDirection = 1;
                 EntryHandling = EntryHandling.UniqueEntries;
                 BarsRequiredToTrade = 5;
                 IsExitOnSessionCloseStrategy = true;
                 ExitOnSessionCloseSeconds = 30;
                 StartBehavior = StartBehavior.ImmediatelySubmit;
-                IsUnmanaged = false;   // ✅ managed mode
+                IsUnmanaged = false;
                 RealtimeErrorHandling = RealtimeErrorHandling.IgnoreAllErrors;
             }
             else if (State == State.Configure)
@@ -66,28 +66,47 @@ namespace NinjaTrader.NinjaScript.Strategies
             }
         }
 
+        // --- Hybrid event flow ---
         protected override void OnBarUpdate()
         {
             if (CurrentBar < BarsRequiredToTrade) return;
             if (State != State.Realtime) return;
 
-            // Debug info
-            Print($"[{Time[0]}] OnBarUpdate | H={High[0]} L={Low[0]} Pos={Position.MarketPosition}");
+            // 1️⃣ Always run cancel logic (tick-based)
+            CheckCancelConditions();
 
-            // 🟠 Cancel only pending BUY entry orders when outside allowed window
+            // 2️⃣ Only run strategy logic once per bar close
+            if (!IsFirstTickOfBar)
+                return;
+
+            RunMainLogic();
+        }
+
+        // 🧩 --- Cancel Logic ---
+        private void CheckCancelConditions()
+        {
             if (!InAllowedWindow()
                 && longOrder != null
                 && longOrder.OrderState == OrderState.Working
                 && longOrder.OrderAction == OrderAction.Buy)
             {
                 double distance = Math.Abs(Close[0] - longOrder.StopPrice);
+                Print($"[{Time[0]}] (Tick) Checking cancel condition | InAllowed={InAllowedWindow()} | " +
+                      $"OrderAction={longOrder.OrderAction} | StopPrice={longOrder.StopPrice} | " +
+                      $"Close={Close[0]} | Dist={distance:F2} | CancelDist={cancelDistance:F2}");
+
                 if (distance < cancelDistance)
                 {
                     Print($"[{Time[0]}] 🚫 Outside allowed window & price {Close[0]} near BUY stop {longOrder.StopPrice} (< {cancelDistance:F2}) → cancelling entry order");
                     CancelOrder(longOrder);
                 }
             }
+        }
 
+        // 🧩 --- Main Logic (runs once per candle close) ---
+        private void RunMainLogic()
+        {
+            Print($"[{Time[0]}] [BAR CLOSE] H={High[0]} L={Low[0]} Pos={Position.MarketPosition}");
 
             // 🔹 Flatten if 1:1 R/R reached
             if (Position.MarketPosition == MarketPosition.Long)
@@ -98,7 +117,7 @@ namespace NinjaTrader.NinjaScript.Strategies
                     Print($"[{Time[0]}] [FLATTEN] 1:1 R/R reached (reward={reward}, risk={riskPerTrade}) → closing position");
                     ExitLong("RR_Flatten", "Long1");
                 }
-                return; // don’t place new orders while in position
+                return;
             }
 
             // Skip if not flat
@@ -108,17 +127,14 @@ namespace NinjaTrader.NinjaScript.Strategies
             // Only act on red candles (Close < Open)
             if (Close[0] < Open[0])
             {
-                entryPrice = High[0] + TickSize;      // stop entry above high
-                pendingStopPrice = Low[0] - TickSize; // SL under low
+                entryPrice = High[0] + TickSize;
+                pendingStopPrice = Low[0] - TickSize;
                 riskPerTrade = entryPrice - pendingStopPrice;
 
-                // ✅ Attach SL BEFORE entry (fixes reuse bug)
+                // Set stop loss before entry
                 SetStopLoss("Long1", CalculationMode.Price, pendingStopPrice, false);
 
-                // ⚙️ Define stop/limit price
                 double stopPrice = entryPrice;
-
-                // ✅ Submit Buy Stop Limit (normal case)
                 longOrder = EnterLongStopLimit(0, true, 1, stopPrice, stopPrice, "Long1");
 
                 Print($"[{Time[0]}] >>> Submitted new LONG stop-limit @ {entryPrice}, SL @ {pendingStopPrice}");
