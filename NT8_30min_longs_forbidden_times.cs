@@ -1,5 +1,6 @@
 #region Using declarations
 using System;
+using System.Collections.Generic;   // ✅ Needed for List<>
 using NinjaTrader.Cbi;
 using NinjaTrader.Gui;
 using NinjaTrader.Gui.Chart;
@@ -20,13 +21,8 @@ namespace NinjaTrader.NinjaScript.Strategies
         private double delayedEntry = 0;
         private double delayedStop = 0;
 
-        // 🔹 Define forbidden windows (HHMMSS format using ToTime)
-        // Example: 10:00–10:30 and 14:00–14:15
-        private (int start, int end)[] forbiddenWindows = new (int, int)[]
-        {
-            (100000, 103000),
-            (140000, 141500)
-        };
+        // 🔹 Forbidden trading windows (HHmm format)
+        private List<Tuple<int,int>> forbiddenWindows;
 
         protected override void OnStateChange()
         {
@@ -42,6 +38,14 @@ namespace NinjaTrader.NinjaScript.Strategies
                 StartBehavior = StartBehavior.ImmediatelySubmit;
                 IsUnmanaged = false;
                 RealtimeErrorHandling = RealtimeErrorHandling.IgnoreAllErrors;
+            }
+            else if (State == State.DataLoaded)
+            {
+                forbiddenWindows = new List<Tuple<int,int>>();
+
+                // Example: block trades from 10:00–10:30 and 14:00–14:15
+                forbiddenWindows.Add(new Tuple<int,int>(1000, 1030));
+                forbiddenWindows.Add(new Tuple<int,int>(1400, 1415));
             }
             else if (State == State.Realtime)
             {
@@ -64,7 +68,7 @@ namespace NinjaTrader.NinjaScript.Strategies
             Print($"[{Time[0]}] OnBarUpdate | H={High[0]} L={Low[0]} Pos={Position.MarketPosition}");
 
             // Check if current bar is in forbidden window
-            bool inForbidden = IsInForbiddenWindow(ToTime(Time[0]));
+            bool inForbidden = IsInForbiddenWindow(ToTime(Time[0]) / 100); // HHmm
 
             // 🔹 Release delayed order if we left forbidden window
             if (!inForbidden && delayedEntry > 0 && Position.MarketPosition == MarketPosition.Flat)
@@ -95,8 +99,8 @@ namespace NinjaTrader.NinjaScript.Strategies
             // Only act on red candles (Close < Open)
             if (Close[0] < Open[0])
             {
-                entryPrice = High[0] + TickSize;     // stop entry above the high
-                pendingStopPrice = Low[0] - TickSize; // SL under the low
+                entryPrice = High[0] + TickSize;       // stop entry above the high
+                pendingStopPrice = Low[0] - TickSize;  // SL under the low
                 riskPerTrade = entryPrice - pendingStopPrice;
 
                 if (inForbidden)
@@ -135,11 +139,14 @@ namespace NinjaTrader.NinjaScript.Strategies
         }
 
         // 🔹 Helper: check if given time is inside a forbidden window
-        private bool IsInForbiddenWindow(int currentTime)
+        private bool IsInForbiddenWindow(int currentTimeHHmm)
         {
-            foreach (var (start, end) in forbiddenWindows)
+            foreach (Tuple<int, int> window in forbiddenWindows)
             {
-                if (currentTime >= start && currentTime < end)
+                int start = window.Item1;
+                int end   = window.Item2;
+
+                if (currentTimeHHmm >= start && currentTimeHHmm < end)
                     return true;
             }
             return false;
