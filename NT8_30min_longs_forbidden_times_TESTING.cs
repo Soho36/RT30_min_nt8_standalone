@@ -10,19 +10,29 @@ using NinjaTrader.NinjaScript;
 
 namespace NinjaTrader.NinjaScript.Strategies
 {
-    public class NT8LongOnly : Strategy
+    public class NT8LongOnlyForbiddenTimes : Strategy
     {
         private Order longOrder;
         private double pendingStopPrice;
         private double entryPrice;
         private double riskPerTrade;
 
-        // 🔹 For delayed order storage
-        private double delayedEntry = 0;
-        private double delayedStop = 0;
+        // 🕒 Forbidden window parameters
+        private TimeSpan forbiddenStart = new TimeSpan(10, 00, 0);  // 10:00
+        private TimeSpan forbiddenEnd   = new TimeSpan(11, 00, 0);  // 11:00
+        private double cancelDistance; // calculated as 4 ticks by default
 
+<<<<<<< HEAD:NT8_30min_longs_forbidden_times.cs
         // 🔹 Forbidden trading windows (HHmm format)
         private List<Tuple<int,int>> forbiddenWindows;
+=======
+        // 🧭 Helper: Check if current time is in forbidden window
+        private bool InForbiddenWindow()
+        {
+            TimeSpan now = Times[0][0].TimeOfDay;
+            return now >= forbiddenStart && now <= forbiddenEnd;
+        }
+>>>>>>> 389b5fb6f2336fc578994d41348959c4e7e4c528:NT8_30min_longs_forbidden_times_TESTING.cs
 
         protected override void OnStateChange()
         {
@@ -36,9 +46,10 @@ namespace NinjaTrader.NinjaScript.Strategies
                 IsExitOnSessionCloseStrategy = true;
                 ExitOnSessionCloseSeconds = 30;
                 StartBehavior = StartBehavior.ImmediatelySubmit;
-                IsUnmanaged = false;
+                IsUnmanaged = false;   // ✅ managed mode
                 RealtimeErrorHandling = RealtimeErrorHandling.IgnoreAllErrors;
             }
+<<<<<<< HEAD:NT8_30min_longs_forbidden_times.cs
             else if (State == State.DataLoaded)
             {
                 forbiddenWindows = new List<Tuple<int,int>>();
@@ -46,6 +57,11 @@ namespace NinjaTrader.NinjaScript.Strategies
                 // Example: block trades from 10:00–10:30 and 14:00–14:15
                 forbiddenWindows.Add(new Tuple<int,int>(1000, 1030));
                 forbiddenWindows.Add(new Tuple<int,int>(1400, 1415));
+=======
+            else if (State == State.Configure)
+            {
+                cancelDistance = 4 * TickSize; // roughly $1 on MNQ; adjust as needed
+>>>>>>> 389b5fb6f2336fc578994d41348959c4e7e4c528:NT8_30min_longs_forbidden_times_TESTING.cs
             }
             else if (State == State.Realtime)
             {
@@ -53,8 +69,6 @@ namespace NinjaTrader.NinjaScript.Strategies
                 pendingStopPrice = 0;
                 entryPrice = 0;
                 riskPerTrade = 0;
-                delayedEntry = 0;
-                delayedStop = 0;
                 Print("=== Strategy entering REALTIME mode ===");
             }
         }
@@ -67,17 +81,26 @@ namespace NinjaTrader.NinjaScript.Strategies
             // Debug info
             Print($"[{Time[0]}] OnBarUpdate | H={High[0]} L={Low[0]} Pos={Position.MarketPosition}");
 
+<<<<<<< HEAD:NT8_30min_longs_forbidden_times.cs
             // Check if current bar is in forbidden window
             bool inForbidden = IsInForbiddenWindow(ToTime(Time[0]) / 100); // HHmm
 
             // 🔹 Release delayed order if we left forbidden window
             if (!inForbidden && delayedEntry > 0 && Position.MarketPosition == MarketPosition.Flat)
+=======
+            // 🟠 Cancel Buy-stop pending order if in forbidden window & price too close
+            if (InForbiddenWindow()
+            && longOrder != null
+            && longOrder.OrderState == OrderState.Working
+            && longOrder.OrderAction == OrderAction.Buy)
+>>>>>>> 389b5fb6f2336fc578994d41348959c4e7e4c528:NT8_30min_longs_forbidden_times_TESTING.cs
             {
-                SetStopLoss("Long1", CalculationMode.Price, delayedStop, false);
-                longOrder = EnterLongStopMarket(0, true, 1, delayedEntry, "Long1");
-                Print($"[{Time[0]}] 🟢 Released delayed order @ {delayedEntry}, SL={delayedStop}");
-                delayedEntry = 0;
-                delayedStop = 0;
+                double distance = Math.Abs(Close[0] - longOrder.StopPrice);
+                if (distance < cancelDistance)
+                {
+                    Print($"[{Time[0]}] 🚫 Forbidden window active & price {Close[0]} near stop {longOrder.StopPrice} (< {cancelDistance:F2}) → cancelling order");
+                    CancelOrder(longOrder);
+                }
             }
 
             // 🔹 Flatten if 1:1 R/R reached
@@ -89,7 +112,7 @@ namespace NinjaTrader.NinjaScript.Strategies
                     Print($"[{Time[0]}] [FLATTEN] 1:1 R/R reached (reward={reward}, risk={riskPerTrade}) → closing position");
                     ExitLong("RR_Flatten", "Long1");
                 }
-                return;
+                return; // don’t place new orders while in position
             }
 
             // Skip if not flat
@@ -103,33 +126,30 @@ namespace NinjaTrader.NinjaScript.Strategies
                 pendingStopPrice = Low[0] - TickSize;  // SL under the low
                 riskPerTrade = entryPrice - pendingStopPrice;
 
-                if (inForbidden)
-                {
-                    // Store for later release
-                    delayedEntry = entryPrice;
-                    delayedStop = pendingStopPrice;
-                    Print($"[{Time[0]}] ⏸ Delayed order stored (forbidden window). Entry={delayedEntry}, SL={delayedStop}");
-                }
-                else
-                {
-                    // Normal order placement
-                    SetStopLoss("Long1", CalculationMode.Price, pendingStopPrice, false);
-                    longOrder = EnterLongStopMarket(0, true, 1, entryPrice, "Long1");
-                    Print($"[{Time[0]}] >>> Submitted new LONG stop @ {entryPrice}, SL={pendingStopPrice}");
-                }
+                // ✅ Attach SL BEFORE entry (fixes reuse bug)
+                SetStopLoss("Long1", CalculationMode.Price, pendingStopPrice, false);
+
+                // ⚙️ Define stop/limit price
+                double stopPrice = entryPrice;
+
+                // ✅ Submit Buy Stop Limit (normal case)
+                longOrder = EnterLongStopLimit(0, true, 1, stopPrice, stopPrice, "Long1");
+
+                Print($"[{Time[0]}] >>> Submitted new LONG stop-limit @ {entryPrice}, SL @ {pendingStopPrice}");
             }
         }
 
         protected override void OnExecutionUpdate(Cbi.Execution execution, string executionId, double price, int quantity,
             Cbi.MarketPosition marketPosition, string orderId, DateTime time)
         {
-            if (execution.Order == null) return;
+            if (execution.Order == null)
+                return;
 
             if (execution.Order.Name == "Long1" &&
                 execution.Order.OrderState == OrderState.Filled &&
                 marketPosition == MarketPosition.Long)
             {
-                Print($"[{time}] [ENTRY FILLED] Long entry filled @ {price}, SL is already set @ {pendingStopPrice}");
+                Print($"[{time}] [ENTRY FILLED] Long entry filled @ {price}, SL already set @ {pendingStopPrice}");
             }
 
             if (Position.MarketPosition == MarketPosition.Flat)
@@ -137,6 +157,7 @@ namespace NinjaTrader.NinjaScript.Strategies
                 Print($"[{time}] Flat → no active SL");
             }
         }
+<<<<<<< HEAD:NT8_30min_longs_forbidden_times.cs
 
         // 🔹 Helper: check if given time is inside a forbidden window
         private bool IsInForbiddenWindow(int currentTimeHHmm)
@@ -151,5 +172,7 @@ namespace NinjaTrader.NinjaScript.Strategies
             }
             return false;
         }
+=======
+>>>>>>> 389b5fb6f2336fc578994d41348959c4e7e4c528:NT8_30min_longs_forbidden_times_TESTING.cs
     }
 }
