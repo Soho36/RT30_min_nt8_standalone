@@ -10,15 +10,16 @@ using System.ComponentModel.DataAnnotations;
 
 namespace NinjaTrader.NinjaScript.Strategies
 {
-    public class RTLongOnlyTimeWindows : Strategy
+    public class RTLongTimeWinStopLimit : Strategy
     {
         private Order longOrder;
         private double pendingStopPrice;
         private double entryPrice;
         private double riskPerTrade;
         private DateTime lastFlattenDate = Core.Globals.MinDate;
-		private bool lastWindowState = false;
-		private MarketPosition lastPosition = MarketPosition.Flat;
+        private bool lastWindowState = false;
+        private MarketPosition lastPosition = MarketPosition.Flat;
+        // No need for stopLossSubmitted flag anymore!
 
 
         // ===== TIME WINDOW INPUTS =====
@@ -26,9 +27,9 @@ namespace NinjaTrader.NinjaScript.Strategies
 		[Display(Name = "Use Trade Window", Order = 0, GroupName = "Trade Windows")]
 		public bool UseTradeWindow { get; set; }
 
-		[NinjaScriptProperty]
-		[Display(Name="00:00–00:30", Order=1, GroupName="Trade Windows")]
-		public bool W00 { get; set; }
+        [NinjaScriptProperty]
+        [Display(Name="00:00–00:30", Order=1, GroupName="Trade Windows")]
+        public bool W00 { get; set; }
 
 		[NinjaScriptProperty]
 		[Display(Name="00:30–01:00", Order=2, GroupName="Trade Windows")]
@@ -224,7 +225,7 @@ namespace NinjaTrader.NinjaScript.Strategies
         {
             if (State == State.SetDefaults)
             {
-                Name = "RTLongOnlyTimeWindows";
+                Name = "RTLongTimeWinStopLimit";
                 Calculate = Calculate.OnBarClose;
                 EntriesPerDirection = 1;
                 EntryHandling = EntryHandling.UniqueEntries;
@@ -274,8 +275,8 @@ namespace NinjaTrader.NinjaScript.Strategies
         protected override void OnBarUpdate()
         {
 			if (State != State.Realtime)
-			return;
-		
+			    return;
+
             // === End of session FLATTEN LOGIC ===
             if (ToTime(Time[0]) >= 235700 && ToTime(Time[0]) < 235800)
             {
@@ -283,12 +284,13 @@ namespace NinjaTrader.NinjaScript.Strategies
                 {
                     lastFlattenDate = Time[0];
 					Print($"[{Time[0]}] ❌ End of session FLATTEN → all positions & orders cleared");
+
                     if (Position.MarketPosition == MarketPosition.Long)
                         ExitLong("DailyFlatten", "Long1");
 
                     if (longOrder != null &&
-                        (longOrder.OrderState == OrderState.Working || 
-						longOrder.OrderState == OrderState.Accepted))
+                        (longOrder.OrderState == OrderState.Working ||
+						 longOrder.OrderState == OrderState.Accepted))
                         CancelOrder(longOrder);
                 }
                 return;
@@ -297,15 +299,14 @@ namespace NinjaTrader.NinjaScript.Strategies
             if (CurrentBar < BarsRequiredToTrade) return;
             if (State != State.Realtime) return;
 
-            // 🔹 R:R flatten
+            // 🔹 R:R flatten - THIS STAYS HERE because it's a CONDITION, not an order submission
             if (Position.MarketPosition == MarketPosition.Long)
             {
                 if (Close[0] - entryPrice >= riskPerTrade)
-				{
-					Print($"[{Time[0]}] 🎯 1R reached → reward={Close[0] - entryPrice}, risk={riskPerTrade}");
-					ExitLong("RR_Flatten", "Long1");
-				}
-
+                {
+                    Print($"[{Time[0]}] 🎯 1R reached → reward={Close[0] - entryPrice}, risk={riskPerTrade}");
+                    ExitLong("RR_Flatten", "Long1");
+                }
                 return;
             }
 
@@ -315,48 +316,108 @@ namespace NinjaTrader.NinjaScript.Strategies
             // 🔹 TRADE WINDOW (ENTRY ONLY)
             bool inWindow = IsTradeWindow(Time[0]);
 
-			if (inWindow != lastWindowState)
-			{
-				Print($"[{Time[0]}] 🪟 Trade window state changed → {(inWindow ? "INSIDE" : "OUTSIDE")}");
-				lastWindowState = inWindow;
-			}
+            if (inWindow != lastWindowState)
+            {
+                Print($"[{Time[0]}] 🪟 Trade window state changed → {(inWindow ? "INSIDE" : "OUTSIDE")}");
+                lastWindowState = inWindow;
+            }
 
-			if (!inWindow)
-			{
-				if (longOrder != null &&
-					(longOrder.OrderState == OrderState.Working || longOrder.OrderState == OrderState.Accepted))
-				{
-					Print($"[{Time[0]}] ⏱ Outside window → cancelling pending order @ {longOrder.StopPrice}");
-					CancelOrder(longOrder);
-				}
+            if (!inWindow)
+            {
+                if (longOrder != null &&
+                    (longOrder.OrderState == OrderState.Working || longOrder.OrderState == OrderState.Accepted))
+                {
+                    Print($"[{Time[0]}] ⏱ Outside window → cancelling pending order @ {longOrder.StopPrice}");
+                    CancelOrder(longOrder);
+                }
+                return;
+            }
 
-				return;
-			}
+            // 🔹 Red candle logic - ONLY handles entry now
+            if (Close[0] < Open[0])
+            {
+                entryPrice = High[0];
+                pendingStopPrice = Low[0];
+                riskPerTrade = entryPrice - pendingStopPrice;
 
+                Print($"[{Time[0]}] 🔴 Red candle detected → evaluating entry");
+                Print($"[{Time[0]}] ▶ Entry={entryPrice} SL={pendingStopPrice} Risk={riskPerTrade}");
 
-            // 🔹 Red candle logic
-			if (Close[0] < Open[0])
-			{
-				entryPrice = High[0];
-				pendingStopPrice = Low[0];
-				riskPerTrade = entryPrice - pendingStopPrice;
+                // REMOVED: SetStopLoss and stopLossSubmitted logic
+                // Exit orders will be handled in OnExecutionUpdate
 
-				Print($"[{Time[0]}] 🔴 Red candle detected → evaluating entry");
-				Print($"[{Time[0]}] ▶ Entry={entryPrice} SL={pendingStopPrice} Risk={riskPerTrade}");
+                if (Close[0] > entryPrice)
+                {
+                    longOrder = EnterLongLimit(0, true, 1, entryPrice, "Long1");
+                    Print($"[{Time[0]}] 📥 Submitted BUY LIMIT @ {entryPrice}");
+                }
+                else
+                {
+                    longOrder = EnterLongStopLimit(0, true, 1, entryPrice, entryPrice, "Long1");
+                    Print($"[{Time[0]}] 📥 Submitted BUY STOP-LIMIT @ {entryPrice}");
+                }
+            }
+        }
 
-				SetStopLoss("Long1", CalculationMode.Price, pendingStopPrice, false);
+        /// <summary>
+        /// NEW: OnExecutionUpdate - called IMMEDIATELY when an order fills
+        /// This is the FASTEST way to submit protective orders [citation:2]
+        /// </summary>
+        protected override void OnExecutionUpdate(Execution execution, string executionId,
+            double price, int quantity, MarketPosition marketPosition, string orderId, DateTime time)
+        {
+            // Only process fills for our entry orders
+            if (execution.Order != null && execution.Order.Name == "Long1")
+            {
+                // Check if this is a fill (not a partial fill during order state changes)
+                if (execution.Order.OrderState == OrderState.Filled ||
+                    (execution.Order.OrderState == OrderState.PartFilled && quantity > 0))
+                {
+                    // Update entry price with actual fill price
+                    entryPrice = execution.Order.AverageFillPrice;
 
-				if (Close[0] > entryPrice)
-				{
-					longOrder = EnterLongLimit(0, true, 1, entryPrice, "Long1");
-					Print($"[{Time[0]}] 📥 Submitted BUY LIMIT @ {entryPrice}");
-				}
-				else
-				{
-					longOrder = EnterLongStopLimit(0, true, 1, entryPrice, entryPrice, "Long1");
-					Print($"[{Time[0]}] 📥 Submitted BUY STOP-LIMIT @ {entryPrice}");
-				}
-			}
+                    // Ensure we have a valid stop price
+                    if (pendingStopPrice > 0)
+                    {
+                        // Calculate risk based on actual fill
+                        riskPerTrade = entryPrice - pendingStopPrice;
+
+                        // Submit stop-limit IMMEDIATELY upon fill
+                        // Using 4-tick buffer for better fill chances in fast markets
+                        double limitPrice = pendingStopPrice -  TickSize;
+
+                        Print($"[{time}] 🚀 Entry FILLED at {entryPrice} - Submitting STOP-LIMIT immediately");
+                        Print($"[{time}]    Stop={pendingStopPrice}, Limit={limitPrice}, Risk={riskPerTrade}");
+
+                        // This submits NOW, not waiting for bar close!
+                        ExitLongStopLimit(0, true, execution.Order.Filled, limitPrice, pendingStopPrice, "StopLimit", "Long1");
+                    }
+                }
+            }
+
+            // Reset entry order tracking when fully filled
+            if (execution.Order != null && execution.Order.Name == "Long1" &&
+                execution.Order.OrderState == OrderState.Filled)
+            {
+                longOrder = null;
+            }
+        }
+
+        /// <summary>
+        /// Optional: Track order updates for debugging
+        /// </summary>
+        protected override void OnOrderUpdate(Order order, double limitPrice, double stopPrice,
+            int quantity, int filled, double averageFillPrice, OrderState orderState,
+            DateTime time, ErrorCode error, string nativeError)
+        {
+            // Track our entry order
+            if (order.Name == "Long1")
+            {
+                longOrder = order;
+            }
+
+            // Optional: Print order updates for debugging
+            // Print($"[{time}] Order Update: {order.Name} - {orderState}");
         }
     }
 }

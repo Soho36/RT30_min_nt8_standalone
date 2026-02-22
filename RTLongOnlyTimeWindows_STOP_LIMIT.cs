@@ -19,6 +19,7 @@ namespace NinjaTrader.NinjaScript.Strategies
         private DateTime lastFlattenDate = Core.Globals.MinDate;
 		private bool lastWindowState = false;
 		private MarketPosition lastPosition = MarketPosition.Flat;
+        private bool stopLossSubmitted = false;  // NEW: Track if stop loss already submitted
 
 
         // ===== TIME WINDOW INPUTS =====
@@ -253,6 +254,7 @@ namespace NinjaTrader.NinjaScript.Strategies
                 pendingStopPrice = 0;
                 entryPrice = 0;
                 riskPerTrade = 0;
+                stopLossSubmitted = false;  // NEW
                 Print("=== Strategy entering REALTIME mode ===");
             }
         }
@@ -274,8 +276,8 @@ namespace NinjaTrader.NinjaScript.Strategies
         protected override void OnBarUpdate()
         {
 			if (State != State.Realtime)
-			return;
-		
+			    return;
+
             // === End of session FLATTEN LOGIC ===
             if (ToTime(Time[0]) >= 235700 && ToTime(Time[0]) < 235800)
             {
@@ -283,12 +285,13 @@ namespace NinjaTrader.NinjaScript.Strategies
                 {
                     lastFlattenDate = Time[0];
 					Print($"[{Time[0]}] ❌ End of session FLATTEN → all positions & orders cleared");
+                    
                     if (Position.MarketPosition == MarketPosition.Long)
                         ExitLong("DailyFlatten", "Long1");
 
                     if (longOrder != null &&
-                        (longOrder.OrderState == OrderState.Working || 
-						longOrder.OrderState == OrderState.Accepted))
+                        (longOrder.OrderState == OrderState.Working ||
+						 longOrder.OrderState == OrderState.Accepted))
                         CancelOrder(longOrder);
                 }
                 return;
@@ -297,6 +300,20 @@ namespace NinjaTrader.NinjaScript.Strategies
             if (CurrentBar < BarsRequiredToTrade) return;
             if (State != State.Realtime) return;
 
+            // 🔹 Check if we just got filled and need to set stop loss
+            if (Position.MarketPosition == MarketPosition.Long && !stopLossSubmitted && entryPrice > 0 && pendingStopPrice > 0)
+            {
+                // Use ExitLongStopLimit instead of SetStopLoss
+                // Parameters: limitPrice, stopPrice, signalName, fromEntrySignal
+                ExitLongStopLimit(pendingStopPrice,    // limit price (same as stop for strict execution)
+                                 pendingStopPrice,     // stop price
+                                 "StopLimit",          // signal name
+                                 "Long1");              // from entry signal
+                
+                Print($"[{Time[0]}] 📥 STOP-LIMIT submitted via ExitLongStopLimit @ stop={pendingStopPrice}");
+                stopLossSubmitted = true;
+            }
+
             // 🔹 R:R flatten
             if (Position.MarketPosition == MarketPosition.Long)
             {
@@ -304,13 +321,19 @@ namespace NinjaTrader.NinjaScript.Strategies
 				{
 					Print($"[{Time[0]}] 🎯 1R reached → reward={Close[0] - entryPrice}, risk={riskPerTrade}");
 					ExitLong("RR_Flatten", "Long1");
+                    stopLossSubmitted = false;  // Reset for next trade
 				}
-
                 return;
             }
 
             if (Position.MarketPosition != MarketPosition.Flat)
                 return;
+
+            // Reset flags when flat
+            if (Position.MarketPosition == MarketPosition.Flat)
+            {
+                stopLossSubmitted = false;
+            }
 
             // 🔹 TRADE WINDOW (ENTRY ONLY)
             bool inWindow = IsTradeWindow(Time[0]);
@@ -329,10 +352,8 @@ namespace NinjaTrader.NinjaScript.Strategies
 					Print($"[{Time[0]}] ⏱ Outside window → cancelling pending order @ {longOrder.StopPrice}");
 					CancelOrder(longOrder);
 				}
-
 				return;
 			}
-
 
             // 🔹 Red candle logic
 			if (Close[0] < Open[0])
@@ -344,7 +365,8 @@ namespace NinjaTrader.NinjaScript.Strategies
 				Print($"[{Time[0]}] 🔴 Red candle detected → evaluating entry");
 				Print($"[{Time[0]}] ▶ Entry={entryPrice} SL={pendingStopPrice} Risk={riskPerTrade}");
 
-				SetStopLoss("Long1", CalculationMode.Price, pendingStopPrice, false);
+				// REMOVED: SetStopLoss("Long1", CalculationMode.Price, pendingStopPrice, false);
+                // Stop loss will be submitted after entry fill
 
 				if (Close[0] > entryPrice)
 				{
