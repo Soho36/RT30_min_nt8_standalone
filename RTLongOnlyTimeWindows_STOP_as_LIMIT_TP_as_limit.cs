@@ -18,7 +18,6 @@ namespace NinjaTrader.NinjaScript.Strategies
         private double riskPerTrade;
         private DateTime lastFlattenDate = Core.Globals.MinDate;
         private bool lastWindowState = false;
-        private MarketPosition lastPosition = MarketPosition.Flat;
         // No need for stopLossSubmitted flag anymore!
 
 
@@ -279,36 +278,42 @@ namespace NinjaTrader.NinjaScript.Strategies
 
             // === End of session FLATTEN LOGIC ===
             if (ToTime(Time[0]) >= 235700 && ToTime(Time[0]) < 235800)
-            {
-                if (lastFlattenDate.Date != Time[0].Date)
-                {
-                    lastFlattenDate = Time[0];
+			{
+				if (lastFlattenDate.Date != Time[0].Date)
+				{
+					lastFlattenDate = Time[0];
 					Print($"[{Time[0]}] ❌ End of session FLATTEN → all positions & orders cleared");
 
-                    if (Position.MarketPosition == MarketPosition.Long)
-                        ExitLong("DailyFlatten", "Long1");
+					if (Position.MarketPosition == MarketPosition.Long)
+						ExitLong("DailyFlatten", "Long1");
 
-                    if (longOrder != null &&
-                        (longOrder.OrderState == OrderState.Working ||
+					if (longOrder != null &&
+						(longOrder.OrderState == OrderState.Working ||
 						 longOrder.OrderState == OrderState.Accepted))
-                        CancelOrder(longOrder);
-                }
-                return;
-            }
+						CancelOrder(longOrder);
+				}
+				return;
+			}
 
             if (CurrentBar < BarsRequiredToTrade) return;
             if (State != State.Realtime) return;
 
-            // 🔹 R:R flatten - THIS STAYS HERE because it's a CONDITION, not an order submission
-            if (Position.MarketPosition == MarketPosition.Long)
-            {
-                if (Close[0] - entryPrice >= riskPerTrade)
-                {
-                    Print($"[{Time[0]}] 🎯 1R reached → reward={Close[0] - entryPrice}, risk={riskPerTrade}");
-                    ExitLong("RR_Flatten", "Long1");
-                }
-                return;
-            }
+            // 🔹 R:R flatten - Using exact 1R level
+			if (Position.MarketPosition == MarketPosition.Long)
+			{
+				double targetPrice = entryPrice + riskPerTrade; // exact 1R level
+				
+				if (Close[0] >= targetPrice)  // Bar closed at or above target
+				{
+					Print($"[{Time[0]}] 🎯 1R reached: Bar Close={Close[0]}, Target={targetPrice}");
+					
+					// Submit limit order at exact 1R level
+					ExitLongLimit(0, true, 1, targetPrice, "RR_Limit", "Long1");
+					
+					Print($"[{Time[0]}] 📤 Limit order submitted @ {targetPrice}");
+				}
+				return;
+			}
 
             if (Position.MarketPosition != MarketPosition.Flat)
                 return;
@@ -370,8 +375,7 @@ namespace NinjaTrader.NinjaScript.Strategies
             if (execution.Order != null && execution.Order.Name == "Long1")
             {
                 // Check if this is a fill (not a partial fill during order state changes)
-                if (execution.Order.OrderState == OrderState.Filled ||
-                    (execution.Order.OrderState == OrderState.PartFilled && quantity > 0))
+                if (execution.Order.OrderState == OrderState.Filled)
                 {
                     // Update entry price with actual fill price
                     entryPrice = execution.Order.AverageFillPrice;
