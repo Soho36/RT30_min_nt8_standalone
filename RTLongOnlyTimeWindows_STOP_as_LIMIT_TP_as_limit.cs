@@ -297,11 +297,12 @@ namespace NinjaTrader.NinjaScript.Strategies
 
             if (CurrentBar < BarsRequiredToTrade) return;
             if (State != State.Realtime) return;
-
+			
+			/// EXIT BLOCK
             // 🔹 R:R flatten - Using exact 1R level
 			if (Position.MarketPosition == MarketPosition.Long)
 			{
-				double targetPrice = entryPrice + riskPerTrade; // exact 1R level
+				double targetPrice = entryPrice + riskPerTrade; // exact 1R level (ideally happens at bar close price)
 				
 				if (Close[0] >= targetPrice)  // Bar closed at or above target
 				{
@@ -338,7 +339,8 @@ namespace NinjaTrader.NinjaScript.Strategies
                 return;
             }
 
-            // 🔹 Red candle logic - ONLY handles entry now
+            // 🔹 Red candle logic
+			/// ENTRY BLOCK
             if (Close[0] < Open[0])
             {
                 entryPrice = High[0];
@@ -352,10 +354,12 @@ namespace NinjaTrader.NinjaScript.Strategies
                 // Exit orders will be handled in OnExecutionUpdate
 
                 if (Close[0] > entryPrice)
+				// If price gapped up:	
                 {
                     longOrder = EnterLongLimit(0, true, 1, entryPrice, "Long1");
                     Print($"[{Time[0]}] 📥 Submitted BUY LIMIT @ {entryPrice}");
                 }
+				// Regular entry:
                 else
                 {
                     longOrder = EnterLongStopLimit(0, true, 1, entryPrice, entryPrice, "Long1");
@@ -363,11 +367,9 @@ namespace NinjaTrader.NinjaScript.Strategies
                 }
             }
         }
-
-        /// <summary>
-        /// NEW: OnExecutionUpdate - called IMMEDIATELY when an order fills
-        /// This is the FASTEST way to submit protective orders [citation:2]
-        /// </summary>
+		
+		/// STOP-LOSS ORDERS BLOCK	
+        // OnExecutionUpdate - called IMMEDIATELY when an order fills
         protected override void OnExecutionUpdate(Execution execution, string executionId,
             double price, int quantity, MarketPosition marketPosition, string orderId, DateTime time)
         {
@@ -387,14 +389,17 @@ namespace NinjaTrader.NinjaScript.Strategies
                         riskPerTrade = entryPrice - pendingStopPrice;
 
                         // Submit stop-limit IMMEDIATELY upon fill
-                        // Using 4-tick buffer for better fill chances in fast markets
-                        double limitPrice = pendingStopPrice -  TickSize;
+                        // Using tick buffer for better fill chances in fast markets
+                        double limitPrice = pendingStopPrice -  TickSize;						
 
                         Print($"[{time}] 🚀 Entry FILLED at {entryPrice} - Submitting STOP-LIMIT immediately");
                         Print($"[{time}]    Stop={pendingStopPrice}, Limit={limitPrice}, Risk={riskPerTrade}");
 
-                        // This submits NOW, not waiting for bar close!
-                        ExitLongStopLimit(0, true, execution.Order.Filled, limitPrice, pendingStopPrice, "StopLimit", "Long1");
+                        // Uncomment next line for different Limit and Stop prices (with some tick buffer)
+                        // ExitLongStopLimit(0, true, execution.Order.Filled, limitPrice, pendingStopPrice, "StopLimit", "Long1");
+						
+						// Uncomment next line for Limit price = Stop price: have to test will execute properly (entry order does!)
+						ExitLongStopLimit(0, true, execution.Order.Filled, pendingStopPrice, pendingStopPrice, "StopLimit", "Long1");
                     }
                 }
             }
@@ -407,9 +412,7 @@ namespace NinjaTrader.NinjaScript.Strategies
             }
         }
 
-        /// <summary>
-        /// Optional: Track order updates for debugging
-        /// </summary>
+        // Optional: Track order updates for debugging
         protected override void OnOrderUpdate(Order order, double limitPrice, double stopPrice,
             int quantity, int filled, double averageFillPrice, OrderState orderState,
             DateTime time, ErrorCode error, string nativeError)
