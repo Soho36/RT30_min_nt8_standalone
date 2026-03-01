@@ -10,7 +10,7 @@ using System.ComponentModel.DataAnnotations;
 
 namespace NinjaTrader.NinjaScript.Strategies
 {
-    public class RTLongTimeWinStopLimitTPlimit : Strategy
+    public class RTLongTimeWinStopLimit : Strategy
     {
         private Order longOrder;
         private double pendingStopPrice;
@@ -224,7 +224,7 @@ namespace NinjaTrader.NinjaScript.Strategies
         {
             if (State == State.SetDefaults)
             {
-                Name = "RTLongTimeWinStopLimitTPlimit";
+                Name = "RTLongTimeWinStopLimit";
                 Calculate = Calculate.OnBarClose;
                 EntriesPerDirection = 1;
                 EntryHandling = EntryHandling.UniqueEntries;
@@ -304,11 +304,14 @@ namespace NinjaTrader.NinjaScript.Strategies
 			{
 				double targetPrice = entryPrice + riskPerTrade; // exact 1R level (ideally happens at bar close price)
 				
-				if (Close[0] >= targetPrice)
+				if (Close[0] >= targetPrice)  // Bar closed at or above target
 				{
 					Print($"[{Time[0]}] 🎯 1R reached: Bar Close={Close[0]}, Target={targetPrice}");
-					ExitLongLimit(0, true, 1, Close[0], "RR_Limit", "Long1");
-					Print($"[{Time[0]}] 📤 Limit order submitted @ {Close[0]}");
+					
+					// Submit limit order at exact 1R level
+					ExitLongLimit(0, true, 1, targetPrice, "RR_Limit", "Long1");
+					
+					Print($"[{Time[0]}] 📤 Limit order submitted @ {targetPrice}");
 				}
 				return;
 			}
@@ -339,30 +342,25 @@ namespace NinjaTrader.NinjaScript.Strategies
             // 🔹 Red candle logic
 			/// ENTRY BLOCK
             if (Close[0] < Open[0])
-            {
-                entryPrice = High[0];
-                pendingStopPrice = Low[0];
-                riskPerTrade = entryPrice - pendingStopPrice;
+			{
+				entryPrice = High[0];
+				pendingStopPrice = Low[0];
+				riskPerTrade = entryPrice - pendingStopPrice;
 
-                Print($"[{Time[0]}] 🔴 Red candle detected → evaluating entry");
-                Print($"[{Time[0]}] ▶ Entry={entryPrice} SL={pendingStopPrice} Risk={riskPerTrade}");
+				Print($"[{Time[0]}] 🔴 Red candle detected → evaluating entry");
+				Print($"[{Time[0]}] ▶ Entry={entryPrice} SL={pendingStopPrice} Risk={riskPerTrade}");
 
-                // REMOVED: SetStopLoss and stopLossSubmitted logic
-                // Exit orders will be handled in OnExecutionUpdate
+				double ask = GetCurrentAsk();
 
-                if (Close[0] > entryPrice)
-				// If price gapped up:	
-                {
-                    longOrder = EnterLongLimit(0, true, 1, entryPrice, "Long1");
-                    Print($"[{Time[0]}] 📥 Submitted BUY LIMIT @ {entryPrice}");
-                }
-				// Regular entry:
-                else
-                {
-                    longOrder = EnterLongStopLimit(0, true, 1, entryPrice, entryPrice, "Long1");
-                    Print($"[{Time[0]}] 📥 Submitted BUY STOP-LIMIT @ {entryPrice}");
-                }
-            }
+				if (ask >= entryPrice)
+				{
+					Print($"[{Time[0]}] ⚠️ Gap above entry → skipping stop placement");
+					return;
+				}
+
+				longOrder = EnterLongStopLimit(0, true, 1, entryPrice, entryPrice, "Long1");
+				Print($"[{Time[0]}] 📥 Submitted BUY STOP-LIMIT @ {entryPrice}");
+			}
         }
 		
 		/// STOP-LOSS ORDERS BLOCK	
@@ -386,7 +384,6 @@ namespace NinjaTrader.NinjaScript.Strategies
                         riskPerTrade = entryPrice - pendingStopPrice;
 
                         // Submit stop-limit IMMEDIATELY upon fill
-
                         // Using tick buffer for better fill chances in fast markets
                         double limitPrice = pendingStopPrice -  TickSize;						
 

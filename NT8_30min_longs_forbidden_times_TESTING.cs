@@ -1,5 +1,6 @@
 #region Using declarations
 using System;
+using System.Collections.Generic;   // ✅ Needed for List<>
 using NinjaTrader.Cbi;
 using NinjaTrader.Gui;
 using NinjaTrader.Gui.Chart;
@@ -21,12 +22,17 @@ namespace NinjaTrader.NinjaScript.Strategies
         private TimeSpan forbiddenEnd   = new TimeSpan(11, 00, 0);  // 11:00
         private double cancelDistance; // calculated as 4 ticks by default
 
+<<<<<<< HEAD:NT8_30min_longs_forbidden_times.cs
+        // 🔹 Forbidden trading windows (HHmm format)
+        private List<Tuple<int,int>> forbiddenWindows;
+=======
         // 🧭 Helper: Check if current time is in forbidden window
         private bool InForbiddenWindow()
         {
             TimeSpan now = Times[0][0].TimeOfDay;
             return now >= forbiddenStart && now <= forbiddenEnd;
         }
+>>>>>>> 389b5fb6f2336fc578994d41348959c4e7e4c528:NT8_30min_longs_forbidden_times_TESTING.cs
 
         protected override void OnStateChange()
         {
@@ -43,9 +49,19 @@ namespace NinjaTrader.NinjaScript.Strategies
                 IsUnmanaged = false;   // ✅ managed mode
                 RealtimeErrorHandling = RealtimeErrorHandling.IgnoreAllErrors;
             }
+<<<<<<< HEAD:NT8_30min_longs_forbidden_times.cs
+            else if (State == State.DataLoaded)
+            {
+                forbiddenWindows = new List<Tuple<int,int>>();
+
+                // Example: block trades from 10:00–10:30 and 14:00–14:15
+                forbiddenWindows.Add(new Tuple<int,int>(1000, 1030));
+                forbiddenWindows.Add(new Tuple<int,int>(1400, 1415));
+=======
             else if (State == State.Configure)
             {
                 cancelDistance = 4 * TickSize; // roughly $1 on MNQ; adjust as needed
+>>>>>>> 389b5fb6f2336fc578994d41348959c4e7e4c528:NT8_30min_longs_forbidden_times_TESTING.cs
             }
             else if (State == State.Realtime)
             {
@@ -65,11 +81,19 @@ namespace NinjaTrader.NinjaScript.Strategies
             // Debug info
             Print($"[{Time[0]}] OnBarUpdate | H={High[0]} L={Low[0]} Pos={Position.MarketPosition}");
 
+<<<<<<< HEAD:NT8_30min_longs_forbidden_times.cs
+            // Check if current bar is in forbidden window
+            bool inForbidden = IsInForbiddenWindow(ToTime(Time[0]) / 100); // HHmm
+
+            // 🔹 Release delayed order if we left forbidden window
+            if (!inForbidden && delayedEntry > 0 && Position.MarketPosition == MarketPosition.Flat)
+=======
             // 🟠 Cancel Buy-stop pending order if in forbidden window & price too close
             if (InForbiddenWindow()
             && longOrder != null
             && longOrder.OrderState == OrderState.Working
             && longOrder.OrderAction == OrderAction.Buy)
+>>>>>>> 389b5fb6f2336fc578994d41348959c4e7e4c528:NT8_30min_longs_forbidden_times_TESTING.cs
             {
                 double distance = Math.Abs(Close[0] - longOrder.StopPrice);
                 if (distance < cancelDistance)
@@ -98,8 +122,8 @@ namespace NinjaTrader.NinjaScript.Strategies
             // Only act on red candles (Close < Open)
             if (Close[0] < Open[0])
             {
-                entryPrice = High[0] + TickSize;     // stop entry above the high
-                pendingStopPrice = Low[0] - TickSize; // SL under the low
+                entryPrice = High[0] + TickSize;       // stop entry above the high
+                pendingStopPrice = Low[0] - TickSize;  // SL under the low
                 riskPerTrade = entryPrice - pendingStopPrice;
 
                 // ✅ Attach SL BEFORE entry (fixes reuse bug)
@@ -133,5 +157,22 @@ namespace NinjaTrader.NinjaScript.Strategies
                 Print($"[{time}] Flat → no active SL");
             }
         }
+<<<<<<< HEAD:NT8_30min_longs_forbidden_times.cs
+
+        // 🔹 Helper: check if given time is inside a forbidden window
+        private bool IsInForbiddenWindow(int currentTimeHHmm)
+        {
+            foreach (Tuple<int, int> window in forbiddenWindows)
+            {
+                int start = window.Item1;
+                int end   = window.Item2;
+
+                if (currentTimeHHmm >= start && currentTimeHHmm < end)
+                    return true;
+            }
+            return false;
+        }
+=======
+>>>>>>> 389b5fb6f2336fc578994d41348959c4e7e4c528:NT8_30min_longs_forbidden_times_TESTING.cs
     }
 }
