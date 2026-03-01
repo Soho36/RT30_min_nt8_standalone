@@ -10,7 +10,7 @@ using System.ComponentModel.DataAnnotations;
 
 namespace NinjaTrader.NinjaScript.Strategies
 {
-    public class RTLongTimeWinStopLimit : Strategy
+    public class RTLongTimeWinStopLimitTPlimit : Strategy
     {
         private Order longOrder;
         private double pendingStopPrice;
@@ -224,7 +224,7 @@ namespace NinjaTrader.NinjaScript.Strategies
         {
             if (State == State.SetDefaults)
             {
-                Name = "RTLongTimeWinStopLimit";
+                Name = "RTLongTimeWinStopLimitTPlimit";
                 Calculate = Calculate.OnBarClose;
                 EntriesPerDirection = 1;
                 EntryHandling = EntryHandling.UniqueEntries;
@@ -303,14 +303,11 @@ namespace NinjaTrader.NinjaScript.Strategies
 			{
 				double targetPrice = entryPrice + riskPerTrade; // exact 1R level
 				
-				if (Close[0] >= targetPrice)  // Bar closed at or above target
+				if (Close[0] >= targetPrice)
 				{
 					Print($"[{Time[0]}] 🎯 1R reached: Bar Close={Close[0]}, Target={targetPrice}");
-					
-					// Submit limit order at exact 1R level
-					ExitLongLimit(0, true, 1, targetPrice, "RR_Limit", "Long1");
-					
-					Print($"[{Time[0]}] 📤 Limit order submitted @ {targetPrice}");
+					ExitLongLimit(0, true, 1, Close[0], "RR_Limit", "Long1");
+					Print($"[{Time[0]}] 📤 Limit order submitted @ {Close[0]}");
 				}
 				return;
 			}
@@ -387,7 +384,6 @@ namespace NinjaTrader.NinjaScript.Strategies
                         riskPerTrade = entryPrice - pendingStopPrice;
 
                         // Submit stop-limit IMMEDIATELY upon fill
-                        // Using 4-tick buffer for better fill chances in fast markets
                         double limitPrice = pendingStopPrice -  TickSize;
 
                         Print($"[{time}] 🚀 Entry FILLED at {entryPrice} - Submitting STOP-LIMIT immediately");
