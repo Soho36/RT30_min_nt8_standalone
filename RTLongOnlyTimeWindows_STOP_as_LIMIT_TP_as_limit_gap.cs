@@ -10,7 +10,7 @@ using System.ComponentModel.DataAnnotations;
 
 namespace NinjaTrader.NinjaScript.Strategies
 {
-    public class RTLongTimeWinStopLimit : Strategy
+    public class RTLongTimeWinStopLimitTPlimitGAP : Strategy
     {
         private Order longOrder;
         private double pendingStopPrice;
@@ -20,7 +20,11 @@ namespace NinjaTrader.NinjaScript.Strategies
         private bool lastWindowState = false;
         // No need for stopLossSubmitted flag anymore!
 
-
+		// ===== RISK REWARD RATIO =====
+		[NinjaScriptProperty]
+		[Display(Name = "Risk/Reward Ratio", Order = 0, GroupName = "Risk Management")]
+		public double RiskRewardRatio { get; set; }
+		
         // ===== TIME WINDOW INPUTS =====
 		[NinjaScriptProperty]
 		[Display(Name = "Use Trade Window", Order = 0, GroupName = "Trade Windows")]
@@ -224,7 +228,7 @@ namespace NinjaTrader.NinjaScript.Strategies
         {
             if (State == State.SetDefaults)
             {
-                Name = "RTLongTimeWinStopLimit";
+                Name = "RTLongTimeWinStopLimitTPlimitGAP";
                 Calculate = Calculate.OnBarClose;
                 EntriesPerDirection = 1;
                 EntryHandling = EntryHandling.UniqueEntries;
@@ -234,7 +238,7 @@ namespace NinjaTrader.NinjaScript.Strategies
                 StartBehavior = StartBehavior.ImmediatelySubmit;
                 IsUnmanaged = false;
                 RealtimeErrorHandling = RealtimeErrorHandling.IgnoreAllErrors;
-
+				RiskRewardRatio = 1.0;
                 UseTradeWindow = true;
             }
             else if (State == State.DataLoaded)
@@ -302,7 +306,7 @@ namespace NinjaTrader.NinjaScript.Strategies
             // 🔹 R:R flatten - Using exact 1R level
 			if (Position.MarketPosition == MarketPosition.Long)
 			{
-				double targetPrice = entryPrice + riskPerTrade; // exact 1R level (ideally happens at bar close price)
+				double targetPrice = entryPrice + (riskPerTrade * RiskRewardRatio); // R/R level
 				
 				if (Close[0] >= targetPrice)  // Bar closed at or above target
 				{
