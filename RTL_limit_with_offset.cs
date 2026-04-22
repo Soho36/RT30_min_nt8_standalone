@@ -126,6 +126,8 @@ namespace NinjaTrader.NinjaScript.Strategies
         [Display(Name = "December", Order = 13, GroupName = "Month Filter")] public bool TradeDecember { get; set; }
         #endregion
 		
+		private bool _isRealtime = false;
+
 		private bool   _wasInPosition   = false;
         private double _initialEntryRef = 0.0;
         private double _initialRisk     = 0.0;
@@ -137,6 +139,10 @@ namespace NinjaTrader.NinjaScript.Strategies
         private bool _setupArmed = false;
         private bool _submissionPending = false;
         private bool _breakoutTriggered = false;
+		
+		private const string STOP_LIMIT_EXIT_NAME = "ProtectiveStopLimit";
+		private Order _stopLimitExitOrder = null;
+
 
         private Order _limitOrder = null;
 
@@ -152,7 +158,8 @@ namespace NinjaTrader.NinjaScript.Strategies
                 Name = "RedGreenBreakoutEA";
                 Calculate = Calculate.OnEachTick;
                 EntriesPerDirection = 1;
-                EntryHandling = EntryHandling.AllEntries;
+                EntryHandling = EntryHandling.UniqueEntries;
+				StartBehavior = StartBehavior.ImmediatelySubmit;
                 IsExitOnSessionCloseStrategy = false;
 
                 Quantity = 1;
@@ -193,6 +200,13 @@ namespace NinjaTrader.NinjaScript.Strategies
                 TradeNovember = true;
                 TradeDecember = true;
             }
+			else if (State == State.Realtime)
+			{
+				_isRealtime = true;
+				ResetSetup();
+				Print("=== Realtime started: strategy state reset ===");
+			}
+
             else if (State == State.Configure)
             {
                 _allowedHoursSet.Clear();
@@ -209,18 +223,16 @@ namespace NinjaTrader.NinjaScript.Strategies
             }
         }
 
-		protected override void OnOrderUpdate(
-										Order order,
-										double limitPrice,
-										double stopPrice,
-										int quantity,
-										int filled,
-										double averageFillPrice,
-										OrderState orderState,
-										DateTime time,
-										ErrorCode error,
-										string comment
-									  )
+		protected override void OnOrderUpdate(Order order,
+									  double limitPrice,
+									  double stopPrice,
+									  int quantity,
+									  int filled,
+									  double averageFillPrice,
+									  OrderState orderState,
+									  DateTime time,
+									  ErrorCode error,
+									  string comment)
         {
             if (order == null || order.Name != LIMIT_ORDER_NAME)
                 return;
@@ -271,6 +283,8 @@ namespace NinjaTrader.NinjaScript.Strategies
         }
 
 
+
+
         protected override void OnBarUpdate()
         {
             if (CurrentBar < 1)
@@ -286,7 +300,13 @@ namespace NinjaTrader.NinjaScript.Strategies
                 return;
             }
 
-            if (_setupArmed && !_breakoutTriggered && !_submissionPending && Position.MarketPosition == MarketPosition.Flat)
+            if (_isRealtime
+				&& _setupArmed
+				&& !_breakoutTriggered
+				&& !_submissionPending
+				&& Position.MarketPosition == MarketPosition.Flat
+				)
+
             {
                 double ask = GetCurrentAsk();
                 if (ask >= _signalHigh)
@@ -302,12 +322,17 @@ namespace NinjaTrader.NinjaScript.Strategies
             bool isInPosition = Position.MarketPosition == MarketPosition.Long;
 
             if (!isInPosition && _wasInPosition)
-            {
-                _initialEntryRef = 0.0;
-                _initialRisk     = 0.0;
-                _initialSet      = false;
-                _limitOrder      = null;
-            }
+			{
+				_initialEntryRef = 0.0;
+				_initialRisk     = 0.0;
+				_initialSet      = false;
+				_limitOrder      = null;
+				_stopLimitExitOrder = null;
+				_setupArmed      = false;
+				_submissionPending = false;
+				_breakoutTriggered = false;
+			}
+
 
             _wasInPosition = isInPosition;
 
@@ -328,9 +353,9 @@ namespace NinjaTrader.NinjaScript.Strategies
                 if (_initialSet && _initialRisk > 0.0)
                 {
                     double target = _initialEntryRef + _initialRisk * RiskReward;
-                    double priorBarClose = Close[1];
+                    double priorBarClose = Close[1]; 
 
-                    if (priorBarClose >= target)
+                    if (priorBarClose >= target) 	// Bar closed at or above target
                     {
                         Print(string.Format("🎯 Bar-close target reached | Close[1]={0:F5} Target={1:F5}", priorBarClose, target));
                         ExitLong("RRClose", LIMIT_ORDER_NAME);
@@ -407,18 +432,62 @@ namespace NinjaTrader.NinjaScript.Strategies
             double entryPrice = _signalHigh - candleRange * (pct / 100.0);
             entryPrice = Instrument.MasterInstrument.RoundToTickSize(entryPrice);
 
-            double stopLoss = _signalLow;
-
-            SetStopLoss(LIMIT_ORDER_NAME, CalculationMode.Price, stopLoss, false);
-
             _submissionPending = true;
             EnterLongLimit(Quantity, entryPrice, LIMIT_ORDER_NAME);
 
-            Print(string.Format("📤 BuyLimit submitted | Offset={0}% Entry={1:F5} SL={2:F5} RR={3}",
-                pct, entryPrice, stopLoss, RiskReward));
+            Print(string.Format("📤 BuyLimit submitted | Offset={0}% Entry={1:F5} RR={2}",
+			pct, entryPrice, RiskReward));
+
         }
 
+		protected override void OnExecutionUpdate(Execution execution,
+                                          string executionId,
+                                          double price,
+                                          int quantity,
+                                          MarketPosition marketPosition,
+                                          string orderId,
+                                          DateTime time)
+		{
+			if (!_isRealtime || execution == null || execution.Order == null)
+				return;
 
+			if (execution.Order.Name != LIMIT_ORDER_NAME)
+				return;
+
+			if (marketPosition != MarketPosition.Long)
+				return;
+
+			if (!_initialSet)
+			{
+				_initialEntryRef = _signalHigh;
+				_initialRisk     = _signalHigh - _signalLow;
+				_initialSet      = _initialRisk > 0.0;
+			}
+
+			if (_stopLimitExitOrder == null
+				|| _stopLimitExitOrder.OrderState == OrderState.Cancelled
+				|| _stopLimitExitOrder.OrderState == OrderState.Rejected
+				|| _stopLimitExitOrder.OrderState == OrderState.Filled)
+			{
+				double stopPx  = Instrument.MasterInstrument.RoundToTickSize(_signalLow);
+				double limitPx = Instrument.MasterInstrument.RoundToTickSize(stopPx - TickSize);
+
+				ExitLongStopLimit(
+					0,
+					true,
+					execution.Quantity,
+					limitPx,
+					stopPx,
+					STOP_LIMIT_EXIT_NAME,
+					LIMIT_ORDER_NAME
+				);
+
+				Print(string.Format("🛡 StopLimit submitted | Stop={0:F5} Limit={1:F5} Qty={2}",
+					stopPx, limitPx, execution.Quantity));
+			}
+		}
+
+		
         private void CancelPendingLimit()
         {
             if (_limitOrder != null
@@ -433,6 +502,17 @@ namespace NinjaTrader.NinjaScript.Strategies
             _limitOrder = null;
             _submissionPending = false;
             _breakoutTriggered = false;
+			
+			if (_stopLimitExitOrder != null
+				&& _stopLimitExitOrder.OrderState != OrderState.Filled
+				&& _stopLimitExitOrder.OrderState != OrderState.Cancelled
+				&& _stopLimitExitOrder.OrderState != OrderState.Rejected)
+			{
+				CancelOrder(_stopLimitExitOrder);
+				Print("🧹 Previous StopLimit cancelled");
+			}
+			_stopLimitExitOrder = null;
+
         }
 
         private void FlattenAll(string reason)
@@ -456,6 +536,7 @@ namespace NinjaTrader.NinjaScript.Strategies
             _submissionPending = false;
             _breakoutTriggered = false;
             _limitOrder = null;
+			_stopLimitExitOrder = null;
 
             _initialEntryRef = 0.0;
             _initialRisk = 0.0;
