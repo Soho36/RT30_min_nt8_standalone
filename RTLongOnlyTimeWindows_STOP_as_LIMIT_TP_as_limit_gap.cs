@@ -313,7 +313,7 @@ namespace NinjaTrader.NinjaScript.Strategies
 					Print($"[{Time[0]}] 🎯 1R reached: Bar Close={Close[0]}, Target={targetPrice}");
 					
 					// Submit limit order at exact 1R level
-					ExitLongLimit(0, true, 1, targetPrice, "RR_Limit", "Long1");
+					ExitLongLimit(0, true, Position.Quantity, targetPrice, "RR_Limit", "Long1");
 					
 					Print($"[{Time[0]}] 📤 Limit order submitted @ {targetPrice}");
 				}
@@ -362,7 +362,7 @@ namespace NinjaTrader.NinjaScript.Strategies
 					return;
 				}
 
-				longOrder = EnterLongStopLimit(0, true, 1, entryPrice, entryPrice, "Long1");
+				longOrder = EnterLongStopLimit(0, true, DefaultQuantity, entryPrice, entryPrice, "Long1");
 				Print($"[{Time[0]}] 📥 Submitted BUY STOP-LIMIT @ {entryPrice}");
 			}
         }
