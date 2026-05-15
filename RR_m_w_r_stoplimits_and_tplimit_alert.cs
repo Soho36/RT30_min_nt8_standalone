@@ -10,7 +10,7 @@ using System.ComponentModel.DataAnnotations;
 
 namespace NinjaTrader.NinjaScript.Strategies
 {
-    public class RTLongTimeWinStopLimitTPlimitGAP : Strategy
+    public class RRmwrstoplimitsandtplimitAlert : Strategy
     {
         private Order longOrder;
         private double pendingStopPrice;
@@ -149,7 +149,7 @@ namespace NinjaTrader.NinjaScript.Strategies
         {
             if (State == State.SetDefaults)
             {
-                Name = "RTLongTimeWinStopLimitTPlimitGAP";
+                Name = "RRmwrstoplimitsandtplimitAlert";
                 Calculate = Calculate.OnBarClose;
                 EntriesPerDirection = 1;
                 EntryHandling = EntryHandling.UniqueEntries;
