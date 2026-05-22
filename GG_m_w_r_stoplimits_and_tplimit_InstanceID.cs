@@ -19,9 +19,21 @@ namespace NinjaTrader.NinjaScript.Strategies
         private DateTime lastFlattenDate = Core.Globals.MinDate;
         private bool lastWindowState = false;
 
+        // Derived signal names — all unique per instance to prevent cross-instance interference
+        private string EntrySignalName    => $"Long1_{InstanceId}";
+        private string StopLossSignalName => $"StopLimit_{InstanceId}";
+        private string TakeProfitName     => $"RR_Limit_{InstanceId}";
+        private string FlattenName        => $"DailyFlatten_{InstanceId}";
+
+        // ===== INSTANCE ID =====
+        [NinjaScriptProperty]
+        [Display(Name = "Instance ID", Order = 0, GroupName = "Risk Management",
+                 Description = "Unique ID per chart instance — prevents cross-instance order interference when running multiple copies")]
+        public int InstanceId { get; set; }
+
 		// ===== RISK REWARD RATIO =====
 		[NinjaScriptProperty]
-		[Display(Name = "Risk/Reward Ratio", Order = 0, GroupName = "Risk Management")]
+		[Display(Name = "Risk/Reward Ratio", Order = 1, GroupName = "Risk Management")]
 		public double RiskRewardRatio { get; set; }
 		
         // ===== TIME WINDOW INPUTS =====
@@ -141,6 +153,7 @@ namespace NinjaTrader.NinjaScript.Strategies
                 StartBehavior = StartBehavior.ImmediatelySubmit;
                 IsUnmanaged = false;
                 RealtimeErrorHandling = RealtimeErrorHandling.IgnoreAllErrors;
+                InstanceId = 1;
 				RiskRewardRatio = 1.0;
                 UseTradeWindow = true;
             }
@@ -159,7 +172,7 @@ namespace NinjaTrader.NinjaScript.Strategies
                 pendingStopPrice = 0;
                 entryPrice = 0;
                 riskPerTrade = 0;
-                Print("=== Strategy entering REALTIME mode ===");
+                Print($"=== Strategy entering REALTIME mode (Instance {InstanceId}, signal={EntrySignalName}) ===");
             }
         }
 
@@ -187,10 +200,10 @@ namespace NinjaTrader.NinjaScript.Strategies
 				if (lastFlattenDate.Date != Time[0].Date)
 				{
 					lastFlattenDate = Time[0];
-					Print($"[{Time[0]}] ❌ End of session FLATTEN → all positions & orders cleared");
+					Print($"[{Time[0]}] [{EntrySignalName}] ❌ End of session FLATTEN → all positions & orders cleared");
 
 					if (Position.MarketPosition == MarketPosition.Long)
-						ExitLong("DailyFlatten", "Long1");
+						ExitLong(FlattenName, EntrySignalName);
 
 					if (longOrder != null &&
 						(longOrder.OrderState == OrderState.Working ||
@@ -211,9 +224,9 @@ namespace NinjaTrader.NinjaScript.Strategies
 				
 				if (Close[0] >= targetPrice)
 				{
-					Print($"[{Time[0]}] 🎯 1R reached: Bar Close={Close[0]}, Target={targetPrice}");
-					ExitLongLimit(0, true, Position.Quantity, targetPrice, "RR_Limit", "Long1");
-					Print($"[{Time[0]}] 📤 Limit order submitted @ {targetPrice}");
+					Print($"[{Time[0]}] [{EntrySignalName}] 🎯 1R reached: Bar Close={Close[0]}, Target={targetPrice}");
+					ExitLongLimit(0, true, Position.Quantity, targetPrice, TakeProfitName, EntrySignalName);
+					Print($"[{Time[0]}] [{EntrySignalName}] 📤 Limit order submitted @ {targetPrice} (signal={TakeProfitName})");
 				}
 				return;
 			}
@@ -226,7 +239,7 @@ namespace NinjaTrader.NinjaScript.Strategies
 
             if (inWindow != lastWindowState)
             {
-                Print($"[{Time[0]}] 🪟 Trade window state changed → {(inWindow ? "INSIDE" : "OUTSIDE")}");
+                Print($"[{Time[0]}] [{EntrySignalName}] 🪟 Trade window state changed → {(inWindow ? "INSIDE" : "OUTSIDE")}");
                 lastWindowState = inWindow;
             }
 
@@ -235,7 +248,7 @@ namespace NinjaTrader.NinjaScript.Strategies
                 if (longOrder != null &&
                     (longOrder.OrderState == OrderState.Working || longOrder.OrderState == OrderState.Accepted))
                 {
-                    Print($"[{Time[0]}] ⏱ Outside window → cancelling pending order @ {longOrder.StopPrice}");
+                    Print($"[{Time[0]}] [{EntrySignalName}] ⏱ Outside window → cancelling pending order @ {longOrder.StopPrice}");
                     CancelOrder(longOrder);
                 }
                 return;
@@ -249,19 +262,19 @@ namespace NinjaTrader.NinjaScript.Strategies
 				pendingStopPrice = Low[0];
 				riskPerTrade = entryPrice - pendingStopPrice;
 
-				Print($"[{Time[0]}] 🟢 Green candle detected → evaluating entry");
-				Print($"[{Time[0]}] ▶ Entry={entryPrice} SL={pendingStopPrice} Risk={riskPerTrade}");
+				Print($"[{Time[0]}] [{EntrySignalName}] 🟢 Green candle detected → evaluating entry");
+				Print($"[{Time[0]}] [{EntrySignalName}] ▶ Entry={entryPrice} SL={pendingStopPrice} Risk={riskPerTrade}");
 
 				double ask = GetCurrentAsk();
 
 				if (ask >= entryPrice)
 				{
-					Print($"[{Time[0]}] ⚠️ Gap above entry → skipping stop placement");
+					Print($"[{Time[0]}] [{EntrySignalName}] ⚠️ Gap above entry → skipping stop placement");
 					return;
 				}
 
-				longOrder = EnterLongStopLimit(0, true, DefaultQuantity, entryPrice, entryPrice, "Long1");
-				Print($"[{Time[0]}] 📥 Submitted BUY STOP-LIMIT @ {entryPrice}");
+				longOrder = EnterLongStopLimit(0, true, DefaultQuantity, entryPrice, entryPrice, EntrySignalName);
+				Print($"[{Time[0]}] [{EntrySignalName}] 📥 Submitted BUY STOP-LIMIT @ {entryPrice}");
 			}
         }
 		
@@ -269,7 +282,7 @@ namespace NinjaTrader.NinjaScript.Strategies
         protected override void OnExecutionUpdate(Execution execution, string executionId,
             double price, int quantity, MarketPosition marketPosition, string orderId, DateTime time)
         {
-            if (execution.Order != null && execution.Order.Name == "Long1")
+            if (execution.Order != null && execution.Order.Name == EntrySignalName)
             {
                 if (execution.Order.OrderState == OrderState.Filled)
                 {
@@ -280,21 +293,21 @@ namespace NinjaTrader.NinjaScript.Strategies
                         riskPerTrade = entryPrice - pendingStopPrice;
                         double limitPrice = pendingStopPrice - TickSize;						
 
-                        Print($"[{time}] 🚀 Entry FILLED at {entryPrice} - Submitting STOP-LIMIT immediately");
-                        Print($"[{time}]    Stop={pendingStopPrice}, Limit={limitPrice}, Risk={riskPerTrade}");
+                        Print($"[{time}] [{EntrySignalName}] 🚀 Entry FILLED at {entryPrice} - Submitting STOP-LIMIT immediately");
+                        Print($"[{time}] [{EntrySignalName}]    Stop={pendingStopPrice}, Limit={limitPrice}, Risk={riskPerTrade}");
 
                         // Uncomment next line for different Limit and Stop prices (with some tick buffer)
-                        // ExitLongStopLimit(0, true, execution.Order.Filled, limitPrice, pendingStopPrice, "StopLimit", "Long1");
+                        // ExitLongStopLimit(0, true, execution.Order.Filled, limitPrice, pendingStopPrice, StopLossSignalName, EntrySignalName);
 						
-						ExitLongStopLimit(0, true, execution.Order.Filled, pendingStopPrice, pendingStopPrice, "StopLimit", "Long1");
+						ExitLongStopLimit(0, true, execution.Order.Filled, pendingStopPrice, pendingStopPrice, StopLossSignalName, EntrySignalName);
                     }
                 }
-            }
 
-            if (execution.Order != null && execution.Order.Name == "Long1" &&
-                execution.Order.OrderState == OrderState.Filled)
-            {
-                longOrder = null;
+                // Clear local reference once our own entry order is filled
+                if (execution.Order.OrderState == OrderState.Filled)
+                {
+                    longOrder = null;
+                }
             }
         }
 
@@ -302,7 +315,8 @@ namespace NinjaTrader.NinjaScript.Strategies
             int quantity, int filled, double averageFillPrice, OrderState orderState,
             DateTime time, ErrorCode error, string nativeError)
         {
-            if (order.Name == "Long1")
+            // Only track orders that belong to this instance
+            if (order.Name == EntrySignalName)
             {
                 longOrder = order;
             }
