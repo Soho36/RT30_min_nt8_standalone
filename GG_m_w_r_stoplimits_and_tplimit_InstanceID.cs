@@ -24,6 +24,7 @@ namespace NinjaTrader.NinjaScript.Strategies
         private string StopLossSignalName => $"StopLimit_{InstanceId}";
         private string TakeProfitName     => $"RR_Limit_{InstanceId}";
         private string FlattenName        => $"DailyFlatten_{InstanceId}";
+        private int EntryQuantity         => UseCustomQuantity ? CustomQuantity : DefaultQuantity;
 
         // ===== INSTANCE ID =====
         [NinjaScriptProperty]
@@ -35,6 +36,15 @@ namespace NinjaTrader.NinjaScript.Strategies
 		[NinjaScriptProperty]
 		[Display(Name = "Risk/Reward Ratio", Order = 1, GroupName = "Risk Management")]
 		public double RiskRewardRatio { get; set; }
+
+        [NinjaScriptProperty]
+        [Display(Name = "Use Custom Quantity", Order = 2, GroupName = "Risk Management")]
+        public bool UseCustomQuantity { get; set; }
+
+        [NinjaScriptProperty]
+        [Range(1, int.MaxValue)]
+        [Display(Name = "Custom Quantity", Order = 3, GroupName = "Risk Management")]
+        public int CustomQuantity { get; set; }
 		
         // ===== TIME WINDOW INPUTS =====
 		[NinjaScriptProperty]
@@ -155,6 +165,8 @@ namespace NinjaTrader.NinjaScript.Strategies
                 RealtimeErrorHandling = RealtimeErrorHandling.IgnoreAllErrors;
                 InstanceId = 1;
 				RiskRewardRatio = 1.0;
+                UseCustomQuantity = false;
+                CustomQuantity = 1;
                 UseTradeWindow = true;
             }
             else if (State == State.DataLoaded)
@@ -273,7 +285,7 @@ namespace NinjaTrader.NinjaScript.Strategies
 					return;
 				}
 
-				longOrder = EnterLongStopLimit(0, true, DefaultQuantity, entryPrice, entryPrice, EntrySignalName);
+				longOrder = EnterLongStopLimit(0, true, EntryQuantity, entryPrice, entryPrice, EntrySignalName);
 				Print($"[{Time[0]}] [{EntrySignalName}] 📥 Submitted BUY STOP-LIMIT @ {entryPrice}");
 			}
         }
