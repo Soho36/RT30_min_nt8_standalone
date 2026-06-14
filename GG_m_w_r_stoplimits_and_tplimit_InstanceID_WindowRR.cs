@@ -5,6 +5,7 @@ using NinjaTrader.Gui;
 using NinjaTrader.Gui.Chart;
 using NinjaTrader.Data;
 using NinjaTrader.NinjaScript;
+using System.ComponentModel;
 using System.ComponentModel.DataAnnotations;
 #endregion
 
@@ -45,224 +46,249 @@ namespace NinjaTrader.NinjaScript.Strategies
 
         // ===== RISK/REWARD BY TIME WINDOW =====
         [NinjaScriptProperty]
-        [Range(0.01, double.MaxValue)]
+        [Range(0.0, double.MaxValue)]
         [Display(Name="00:00-01:00", Order=0, GroupName="Window Risk/Reward")]
         public double RR00 { get; set; }
 
         [NinjaScriptProperty]
-        [Range(0.01, double.MaxValue)]
+        [Range(0.0, double.MaxValue)]
         [Display(Name="01:00-02:00", Order=1, GroupName="Window Risk/Reward")]
         public double RR01 { get; set; }
 
         [NinjaScriptProperty]
-        [Range(0.01, double.MaxValue)]
+        [Range(0.0, double.MaxValue)]
         [Display(Name="02:00-03:00", Order=2, GroupName="Window Risk/Reward")]
         public double RR02 { get; set; }
 
         [NinjaScriptProperty]
-        [Range(0.01, double.MaxValue)]
+        [Range(0.0, double.MaxValue)]
         [Display(Name="03:00-04:00", Order=3, GroupName="Window Risk/Reward")]
         public double RR03 { get; set; }
 
         [NinjaScriptProperty]
-        [Range(0.01, double.MaxValue)]
+        [Range(0.0, double.MaxValue)]
         [Display(Name="04:00-05:00", Order=4, GroupName="Window Risk/Reward")]
         public double RR04 { get; set; }
 
         [NinjaScriptProperty]
-        [Range(0.01, double.MaxValue)]
+        [Range(0.0, double.MaxValue)]
         [Display(Name="05:00-06:00", Order=5, GroupName="Window Risk/Reward")]
         public double RR05 { get; set; }
 
         [NinjaScriptProperty]
-        [Range(0.01, double.MaxValue)]
+        [Range(0.0, double.MaxValue)]
         [Display(Name="06:00-07:00", Order=6, GroupName="Window Risk/Reward")]
         public double RR06 { get; set; }
 
         [NinjaScriptProperty]
-        [Range(0.01, double.MaxValue)]
+        [Range(0.0, double.MaxValue)]
         [Display(Name="07:00-08:00", Order=7, GroupName="Window Risk/Reward")]
         public double RR07 { get; set; }
 
         [NinjaScriptProperty]
-        [Range(0.01, double.MaxValue)]
+        [Range(0.0, double.MaxValue)]
         [Display(Name="08:00-09:00", Order=8, GroupName="Window Risk/Reward")]
         public double RR08 { get; set; }
 
         [NinjaScriptProperty]
-        [Range(0.01, double.MaxValue)]
+        [Range(0.0, double.MaxValue)]
         [Display(Name="09:00-10:00", Order=9, GroupName="Window Risk/Reward")]
         public double RR09 { get; set; }
 
         [NinjaScriptProperty]
-        [Range(0.01, double.MaxValue)]
+        [Range(0.0, double.MaxValue)]
         [Display(Name="10:00-11:00", Order=10, GroupName="Window Risk/Reward")]
         public double RR10 { get; set; }
 
         [NinjaScriptProperty]
-        [Range(0.01, double.MaxValue)]
+        [Range(0.0, double.MaxValue)]
         [Display(Name="11:00-12:00", Order=11, GroupName="Window Risk/Reward")]
         public double RR11 { get; set; }
 
         [NinjaScriptProperty]
-        [Range(0.01, double.MaxValue)]
+        [Range(0.0, double.MaxValue)]
         [Display(Name="12:00-13:00", Order=12, GroupName="Window Risk/Reward")]
         public double RR12 { get; set; }
 
         [NinjaScriptProperty]
-        [Range(0.01, double.MaxValue)]
+        [Range(0.0, double.MaxValue)]
         [Display(Name="13:00-14:00", Order=13, GroupName="Window Risk/Reward")]
         public double RR13 { get; set; }
 
         [NinjaScriptProperty]
-        [Range(0.01, double.MaxValue)]
+        [Range(0.0, double.MaxValue)]
         [Display(Name="14:00-15:00", Order=14, GroupName="Window Risk/Reward")]
         public double RR14 { get; set; }
 
         [NinjaScriptProperty]
-        [Range(0.01, double.MaxValue)]
+        [Range(0.0, double.MaxValue)]
         [Display(Name="15:00-16:00", Order=15, GroupName="Window Risk/Reward")]
         public double RR15 { get; set; }
 
         [NinjaScriptProperty]
-        [Range(0.01, double.MaxValue)]
+        [Range(0.0, double.MaxValue)]
         [Display(Name="16:00-17:00", Order=16, GroupName="Window Risk/Reward")]
         public double RR16 { get; set; }
 
         [NinjaScriptProperty]
-        [Range(0.01, double.MaxValue)]
+        [Range(0.0, double.MaxValue)]
         [Display(Name="17:00-18:00", Order=17, GroupName="Window Risk/Reward")]
         public double RR17 { get; set; }
 
         [NinjaScriptProperty]
-        [Range(0.01, double.MaxValue)]
+        [Range(0.0, double.MaxValue)]
         [Display(Name="18:00-19:00", Order=18, GroupName="Window Risk/Reward")]
         public double RR18 { get; set; }
 
         [NinjaScriptProperty]
-        [Range(0.01, double.MaxValue)]
+        [Range(0.0, double.MaxValue)]
         [Display(Name="19:00-20:00", Order=19, GroupName="Window Risk/Reward")]
         public double RR19 { get; set; }
 
         [NinjaScriptProperty]
-        [Range(0.01, double.MaxValue)]
+        [Range(0.0, double.MaxValue)]
         [Display(Name="20:00-21:00", Order=20, GroupName="Window Risk/Reward")]
         public double RR20 { get; set; }
 
         [NinjaScriptProperty]
-        [Range(0.01, double.MaxValue)]
+        [Range(0.0, double.MaxValue)]
         [Display(Name="21:00-22:00", Order=21, GroupName="Window Risk/Reward")]
         public double RR21 { get; set; }
 
         [NinjaScriptProperty]
-        [Range(0.01, double.MaxValue)]
+        [Range(0.0, double.MaxValue)]
         [Display(Name="22:00-23:00", Order=22, GroupName="Window Risk/Reward")]
         public double RR22 { get; set; }
 
         [NinjaScriptProperty]
-        [Range(0.01, double.MaxValue)]
+        [Range(0.0, double.MaxValue)]
         [Display(Name="23:00-00:00", Order=23, GroupName="Window Risk/Reward")]
         public double RR23 { get; set; }
 		
         // ===== TIME WINDOW INPUTS =====
 		[NinjaScriptProperty]
 		[Display(Name = "Use Trade Window", Order = 0, GroupName = "Trade Windows")]
+		[Browsable(false)]
 		public bool UseTradeWindow { get; set; }
 
         [NinjaScriptProperty]
         [Display(Name="00:00–01:00", Order=1, GroupName="Trade Windows")]
+        [Browsable(false)]
         public bool W00 { get; set; }
 
 		[NinjaScriptProperty]
 		[Display(Name="01:00–02:00", Order=2, GroupName="Trade Windows")]
+		[Browsable(false)]
 		public bool W01 { get; set; }
 
 		[NinjaScriptProperty]
 		[Display(Name="02:00–03:00", Order=3, GroupName="Trade Windows")]
+		[Browsable(false)]
 		public bool W02 { get; set; }
 
 		[NinjaScriptProperty]
 		[Display(Name="03:00–04:00", Order=4, GroupName="Trade Windows")]
+		[Browsable(false)]
 		public bool W03 { get; set; }
 
 		[NinjaScriptProperty]
 		[Display(Name="04:00–05:00", Order=5, GroupName="Trade Windows")]
+		[Browsable(false)]
 		public bool W04 { get; set; }
 
 		[NinjaScriptProperty]
 		[Display(Name="05:00–06:00", Order=6, GroupName="Trade Windows")]
+		[Browsable(false)]
 		public bool W05 { get; set; }
 
 		[NinjaScriptProperty]
 		[Display(Name="06:00–07:00", Order=7, GroupName="Trade Windows")]
+		[Browsable(false)]
 		public bool W06 { get; set; }
 
 		[NinjaScriptProperty]
 		[Display(Name="07:00–08:00", Order=8, GroupName="Trade Windows")]
+		[Browsable(false)]
 		public bool W07 { get; set; }
 
 		[NinjaScriptProperty]
 		[Display(Name="08:00–09:00", Order=9, GroupName="Trade Windows")]
+		[Browsable(false)]
 		public bool W08 { get; set; }
 
 		[NinjaScriptProperty]
 		[Display(Name="09:00–10:00", Order=10, GroupName="Trade Windows")]
+		[Browsable(false)]
 		public bool W09 { get; set; }
 
 		[NinjaScriptProperty]
 		[Display(Name="10:00–11:00", Order=11, GroupName="Trade Windows")]
+		[Browsable(false)]
 		public bool W10 { get; set; }
 
 		[NinjaScriptProperty]
 		[Display(Name="11:00–12:00", Order=12, GroupName="Trade Windows")]
+		[Browsable(false)]
 		public bool W11 { get; set; }
 
 		[NinjaScriptProperty]
 		[Display(Name="12:00–13:00", Order=13, GroupName="Trade Windows")]
+		[Browsable(false)]
 		public bool W12 { get; set; }
 
 		[NinjaScriptProperty]
 		[Display(Name="13:00–14:00", Order=14, GroupName="Trade Windows")]
+		[Browsable(false)]
 		public bool W13 { get; set; }
 
 		[NinjaScriptProperty]
 		[Display(Name="14:00–15:00", Order=15, GroupName="Trade Windows")]
+		[Browsable(false)]
 		public bool W14 { get; set; }
 
 		[NinjaScriptProperty]
 		[Display(Name="15:00–16:00", Order=16, GroupName="Trade Windows")]
+		[Browsable(false)]
 		public bool W15 { get; set; }
 
 		[NinjaScriptProperty]
 		[Display(Name="16:00–17:00", Order=17, GroupName="Trade Windows")]
+		[Browsable(false)]
 		public bool W16 { get; set; }
 
 		[NinjaScriptProperty]
 		[Display(Name="17:00–18:00", Order=18, GroupName="Trade Windows")]
+		[Browsable(false)]
 		public bool W17 { get; set; }
 
 		[NinjaScriptProperty]
 		[Display(Name="18:00–19:00", Order=19, GroupName="Trade Windows")]
+		[Browsable(false)]
 		public bool W18 { get; set; }
 
 		[NinjaScriptProperty]
 		[Display(Name="19:00–20:00", Order=20, GroupName="Trade Windows")]
+		[Browsable(false)]
 		public bool W19 { get; set; }
 
 		[NinjaScriptProperty]
 		[Display(Name="20:00–21:00", Order=21, GroupName="Trade Windows")]
+		[Browsable(false)]
 		public bool W20 { get; set; }
 
 		[NinjaScriptProperty]
 		[Display(Name="21:00–22:00", Order=22, GroupName="Trade Windows")]
+		[Browsable(false)]
 		public bool W21 { get; set; }
 
 		[NinjaScriptProperty]
 		[Display(Name="22:00–23:00", Order=23, GroupName="Trade Windows")]
+		[Browsable(false)]
 		public bool W22 { get; set; }
 
 		[NinjaScriptProperty]
 		[Display(Name="23:00–00:00", Order=24, GroupName="Trade Windows")]
+		[Browsable(false)]
 		public bool W23 { get; set; }
 
         private bool[] tradeWindows;
@@ -286,13 +312,21 @@ namespace NinjaTrader.NinjaScript.Strategies
                 UseCustomQuantity = false;
                 CustomQuantity = 1;
                 UseTradeWindow = true;
-                RR00 = RR01 = RR02 = RR03 = RR04 = RR05 = 1.0;
-                RR06 = RR07 = RR08 = RR09 = RR10 = RR11 = 1.0;
-                RR12 = RR13 = RR14 = RR15 = RR16 = RR17 = 1.0;
-                RR18 = RR19 = RR20 = RR21 = RR22 = RR23 = 1.0;
+                RR00 = RR01 = RR02 = RR03 = RR04 = RR05 = 0.0;
+                RR06 = RR07 = RR08 = RR09 = RR10 = RR11 = 0.0;
+                RR12 = RR13 = RR14 = RR15 = RR16 = RR17 = 0.0;
+                RR18 = RR19 = RR20 = RR21 = RR22 = RR23 = 0.0;
             }
             else if (State == State.DataLoaded)
             {
+                W00 = RR00 > 0; W01 = RR01 > 0; W02 = RR02 > 0; W03 = RR03 > 0;
+                W04 = RR04 > 0; W05 = RR05 > 0; W06 = RR06 > 0; W07 = RR07 > 0;
+                W08 = RR08 > 0; W09 = RR09 > 0; W10 = RR10 > 0; W11 = RR11 > 0;
+                W12 = RR12 > 0; W13 = RR13 > 0; W14 = RR14 > 0; W15 = RR15 > 0;
+                W16 = RR16 > 0; W17 = RR17 > 0; W18 = RR18 > 0; W19 = RR19 > 0;
+                W20 = RR20 > 0; W21 = RR21 > 0; W22 = RR22 > 0; W23 = RR23 > 0;
+                UseTradeWindow = true;
+
                 tradeWindows = new bool[]
                 {
                     W00, W01, W02, W03, W04, W05, W06, W07,
@@ -320,15 +354,7 @@ namespace NinjaTrader.NinjaScript.Strategies
 
         private bool IsTradeWindow(DateTime time)
         {
-            if (!UseTradeWindow)
-                return true;
-
-            int slot = time.Hour; // 0–23, one slot per hour
-
-            if (slot < 0 || slot > 23)
-                return false;
-
-            return tradeWindows[slot];
+            return GetWindowRiskReward(time) > 0;
         }
 
         private double GetWindowRiskReward(DateTime time)
@@ -410,6 +436,12 @@ namespace NinjaTrader.NinjaScript.Strategies
 				riskPerTrade = entryPrice - pendingStopPrice;
 				pendingRiskReward = GetWindowRiskReward(Time[0]);
 				Print($"[{Time[0]}] [{EntrySignalName}] Window R:R={pendingRiskReward}");
+
+                if (pendingRiskReward <= 0)
+                {
+                    Print($"[{Time[0]}] [{EntrySignalName}] Window R:R is 0 - skipping entry");
+                    return;
+                }
 
 				Print($"[{Time[0]}] [{EntrySignalName}] 🟢 Green candle detected → evaluating entry");
 				Print($"[{Time[0]}] [{EntrySignalName}] ▶ Entry={entryPrice} SL={pendingStopPrice} Risk={riskPerTrade}");
