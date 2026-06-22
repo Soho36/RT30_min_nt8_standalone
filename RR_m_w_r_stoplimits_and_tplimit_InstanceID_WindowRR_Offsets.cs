@@ -403,11 +403,12 @@ namespace NinjaTrader.NinjaScript.Strategies
 
             if (Position.MarketPosition == MarketPosition.Long)
 			{
-				double targetPrice = entryPrice + (riskPerTrade * positionRiskReward);
-				double exitLimitPrice = Instrument.MasterInstrument.RoundToTickSize(targetPrice + (ExitOffset * TickSize));
+				double targetPrice = Instrument.MasterInstrument.RoundToTickSize(entryPrice + (riskPerTrade * positionRiskReward));
 
 				if (Close[0] >= targetPrice)
 				{
+					double exitLimitPrice = Instrument.MasterInstrument.RoundToTickSize(Close[0] + (ExitOffset * TickSize));
+
 					Print($"[{Time[0]}] [{EntrySignalName}] {positionRiskReward}R reached: Bar Close={Close[0]}, Target={targetPrice}");
 					ExitLongLimit(0, true, Position.Quantity, exitLimitPrice, TakeProfitName, EntrySignalName);
 					Print($"[{Time[0]}] [{EntrySignalName}] Limit order submitted @ {exitLimitPrice} (target={targetPrice}, offset={ExitOffset} ticks, signal={TakeProfitName})");
