@@ -412,7 +412,7 @@ namespace NinjaTrader.NinjaScript.Strategies
 
             if (inWindow != lastWindowState)
             {
-                Print($"[{Time[0]}] [{EntrySignalName}] 🪟 Trade window state changed → {(inWindow ? "INSIDE" : "OUTSIDE")}");
+                Print($"[{Time[0]}] [{EntrySignalName}] Trade window state changed -> {(inWindow ? "INSIDE" : "OUTSIDE")}");
                 lastWindowState = inWindow;
             }
 

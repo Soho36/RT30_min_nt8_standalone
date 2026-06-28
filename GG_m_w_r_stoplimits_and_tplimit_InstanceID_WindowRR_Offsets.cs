@@ -44,11 +44,7 @@ namespace NinjaTrader.NinjaScript.Strategies
         [Display(Name = "Custom Quantity", Order = 3, GroupName = "Risk Management")]
         public int CustomQuantity { get; set; }
 
-        [NinjaScriptProperty]
-        [Range(0, int.MaxValue)]
-        [Display(Name = "Entry Offset (ticks)", Order = 4, GroupName = "Risk Management")]
-        public int EntryOffset { get; set; }
-
+		// ===== OFFSETS =====
         [NinjaScriptProperty]
         [Range(0, int.MaxValue)]
         [Display(Name = "Exit Offset (ticks)", Order = 5, GroupName = "Risk Management")]
@@ -321,7 +317,6 @@ namespace NinjaTrader.NinjaScript.Strategies
                 InstanceId = 1;
                 UseCustomQuantity = false;
                 CustomQuantity = 1;
-                EntryOffset = 0;
                 ExitOffset = 0;
                 UseTradeWindow = true;
                 RR00 = RR01 = RR02 = RR03 = RR04 = RR05 = 0.0;
@@ -400,19 +395,20 @@ namespace NinjaTrader.NinjaScript.Strategies
 
             if (CurrentBar < BarsRequiredToTrade) return;
             if (State != State.Realtime) return;
-			
+
 			/// EXIT BLOCK
             // R:R target uses the value captured from the entry signal's time window
 			if (Position.MarketPosition == MarketPosition.Long)
-			{
-				double targetPrice = entryPrice + (riskPerTrade * positionRiskReward);
-				double exitLimitPrice = Instrument.MasterInstrument.RoundToTickSize(targetPrice + (ExitOffset * TickSize));
-				
+            {
+                double targetPrice = Instrument.MasterInstrument.RoundToTickSize(entryPrice + (riskPerTrade * positionRiskReward));
+
 				if (Close[0] >= targetPrice)
 				{
-					Print($"[{Time[0]}] [{EntrySignalName}] 🎯 {positionRiskReward}R reached: Bar Close={Close[0]}, Target={targetPrice}");
+					double exitLimitPrice = Instrument.MasterInstrument.RoundToTickSize(Close[0] + (ExitOffset * TickSize));
+
+					Print($"[{Time[0]}] [{EntrySignalName}] {positionRiskReward}R reached: Bar Close={Close[0]}, Target={targetPrice}");
 					ExitLongLimit(0, true, Position.Quantity, exitLimitPrice, TakeProfitName, EntrySignalName);
-					Print($"[{Time[0]}] [{EntrySignalName}] 📤 Limit order submitted @ {exitLimitPrice} (target={targetPrice}, offset={ExitOffset} ticks, signal={TakeProfitName})");
+					Print($"[{Time[0]}] [{EntrySignalName}] Limit order submitted @ {exitLimitPrice} (target={targetPrice}, offset={ExitOffset} ticks, signal={TakeProfitName})");
 				}
 				return;
 			}
@@ -425,7 +421,7 @@ namespace NinjaTrader.NinjaScript.Strategies
 
             if (inWindow != lastWindowState)
             {
-                Print($"[{Time[0]}] [{EntrySignalName}] 🪟 Trade window state changed → {(inWindow ? "INSIDE" : "OUTSIDE")}");
+                Print($"[{Time[0]}] [{EntrySignalName}] Trade window state changed -> {(inWindow ? "INSIDE" : "OUTSIDE")}");
                 lastWindowState = inWindow;
             }
 
@@ -467,9 +463,8 @@ namespace NinjaTrader.NinjaScript.Strategies
 					return;
 				}
 
-				double entryLimitPrice = Instrument.MasterInstrument.RoundToTickSize(entryPrice - (EntryOffset * TickSize));
-				longOrder = EnterLongStopLimit(0, true, EntryQuantity, entryLimitPrice, entryPrice, EntrySignalName);
-				Print($"[{Time[0]}] [{EntrySignalName}] 📥 Submitted BUY STOP-LIMIT: stop={entryPrice}, limit={entryLimitPrice}, offset={EntryOffset} ticks");
+				longOrder = EnterLongStopLimit(0, true, EntryQuantity, entryPrice, entryPrice, EntrySignalName);
+				Print($"[{Time[0]}] [{EntrySignalName}] 📥 Submitted BUY STOP-LIMIT @ {entryPrice}");
 			}
         }
 		
@@ -489,7 +484,7 @@ namespace NinjaTrader.NinjaScript.Strategies
                     if (pendingStopPrice > 0)
                     {
                         riskPerTrade = entryPrice - pendingStopPrice;
-                        double limitPrice = pendingStopPrice - TickSize;						
+                        double limitPrice = pendingStopPrice - TickSize;
 
                         Print($"[{time}] [{EntrySignalName}] 🚀 Entry FILLED at {entryPrice} - Submitting STOP-LIMIT immediately");
                         Print($"[{time}] [{EntrySignalName}]    Stop={pendingStopPrice}, Limit={limitPrice}, Risk={riskPerTrade}");

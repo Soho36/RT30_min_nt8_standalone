@@ -172,122 +172,122 @@ namespace NinjaTrader.NinjaScript.Strategies
 		public bool UseTradeWindow { get; set; }
 
         [NinjaScriptProperty]
-        [Display(Name="00:00-01:00", Order=1, GroupName="Trade Windows")]
+        [Display(Name="00:00–01:00", Order=1, GroupName="Trade Windows")]
         [Browsable(false)]
         public bool W00 { get; set; }
 
 		[NinjaScriptProperty]
-		[Display(Name="01:00-02:00", Order=2, GroupName="Trade Windows")]
+		[Display(Name="01:00–02:00", Order=2, GroupName="Trade Windows")]
 		[Browsable(false)]
 		public bool W01 { get; set; }
 
 		[NinjaScriptProperty]
-		[Display(Name="02:00-03:00", Order=3, GroupName="Trade Windows")]
+		[Display(Name="02:00–03:00", Order=3, GroupName="Trade Windows")]
 		[Browsable(false)]
 		public bool W02 { get; set; }
 
 		[NinjaScriptProperty]
-		[Display(Name="03:00-04:00", Order=4, GroupName="Trade Windows")]
+		[Display(Name="03:00–04:00", Order=4, GroupName="Trade Windows")]
 		[Browsable(false)]
 		public bool W03 { get; set; }
 
 		[NinjaScriptProperty]
-		[Display(Name="04:00-05:00", Order=5, GroupName="Trade Windows")]
+		[Display(Name="04:00–05:00", Order=5, GroupName="Trade Windows")]
 		[Browsable(false)]
 		public bool W04 { get; set; }
 
 		[NinjaScriptProperty]
-		[Display(Name="05:00-06:00", Order=6, GroupName="Trade Windows")]
+		[Display(Name="05:00–06:00", Order=6, GroupName="Trade Windows")]
 		[Browsable(false)]
 		public bool W05 { get; set; }
 
 		[NinjaScriptProperty]
-		[Display(Name="06:00-07:00", Order=7, GroupName="Trade Windows")]
+		[Display(Name="06:00–07:00", Order=7, GroupName="Trade Windows")]
 		[Browsable(false)]
 		public bool W06 { get; set; }
 
 		[NinjaScriptProperty]
-		[Display(Name="07:00-08:00", Order=8, GroupName="Trade Windows")]
+		[Display(Name="07:00–08:00", Order=8, GroupName="Trade Windows")]
 		[Browsable(false)]
 		public bool W07 { get; set; }
 
 		[NinjaScriptProperty]
-		[Display(Name="08:00-09:00", Order=9, GroupName="Trade Windows")]
+		[Display(Name="08:00–09:00", Order=9, GroupName="Trade Windows")]
 		[Browsable(false)]
 		public bool W08 { get; set; }
 
 		[NinjaScriptProperty]
-		[Display(Name="09:00-10:00", Order=10, GroupName="Trade Windows")]
+		[Display(Name="09:00–10:00", Order=10, GroupName="Trade Windows")]
 		[Browsable(false)]
 		public bool W09 { get; set; }
 
 		[NinjaScriptProperty]
-		[Display(Name="10:00-11:00", Order=11, GroupName="Trade Windows")]
+		[Display(Name="10:00–11:00", Order=11, GroupName="Trade Windows")]
 		[Browsable(false)]
 		public bool W10 { get; set; }
 
 		[NinjaScriptProperty]
-		[Display(Name="11:00-12:00", Order=12, GroupName="Trade Windows")]
+		[Display(Name="11:00–12:00", Order=12, GroupName="Trade Windows")]
 		[Browsable(false)]
 		public bool W11 { get; set; }
 
 		[NinjaScriptProperty]
-		[Display(Name="12:00-13:00", Order=13, GroupName="Trade Windows")]
+		[Display(Name="12:00–13:00", Order=13, GroupName="Trade Windows")]
 		[Browsable(false)]
 		public bool W12 { get; set; }
 
 		[NinjaScriptProperty]
-		[Display(Name="13:00-14:00", Order=14, GroupName="Trade Windows")]
+		[Display(Name="13:00–14:00", Order=14, GroupName="Trade Windows")]
 		[Browsable(false)]
 		public bool W13 { get; set; }
 
 		[NinjaScriptProperty]
-		[Display(Name="14:00-15:00", Order=15, GroupName="Trade Windows")]
+		[Display(Name="14:00–15:00", Order=15, GroupName="Trade Windows")]
 		[Browsable(false)]
 		public bool W14 { get; set; }
 
 		[NinjaScriptProperty]
-		[Display(Name="15:00-16:00", Order=16, GroupName="Trade Windows")]
+		[Display(Name="15:00–16:00", Order=16, GroupName="Trade Windows")]
 		[Browsable(false)]
 		public bool W15 { get; set; }
 
 		[NinjaScriptProperty]
-		[Display(Name="16:00-17:00", Order=17, GroupName="Trade Windows")]
+		[Display(Name="16:00–17:00", Order=17, GroupName="Trade Windows")]
 		[Browsable(false)]
 		public bool W16 { get; set; }
 
 		[NinjaScriptProperty]
-		[Display(Name="17:00-18:00", Order=18, GroupName="Trade Windows")]
+		[Display(Name="17:00–18:00", Order=18, GroupName="Trade Windows")]
 		[Browsable(false)]
 		public bool W17 { get; set; }
 
 		[NinjaScriptProperty]
-		[Display(Name="18:00-19:00", Order=19, GroupName="Trade Windows")]
+		[Display(Name="18:00–19:00", Order=19, GroupName="Trade Windows")]
 		[Browsable(false)]
 		public bool W18 { get; set; }
 
 		[NinjaScriptProperty]
-		[Display(Name="19:00-20:00", Order=20, GroupName="Trade Windows")]
+		[Display(Name="19:00–20:00", Order=20, GroupName="Trade Windows")]
 		[Browsable(false)]
 		public bool W19 { get; set; }
 
 		[NinjaScriptProperty]
-		[Display(Name="20:00-21:00", Order=21, GroupName="Trade Windows")]
+		[Display(Name="20:00–21:00", Order=21, GroupName="Trade Windows")]
 		[Browsable(false)]
 		public bool W20 { get; set; }
 
 		[NinjaScriptProperty]
-		[Display(Name="21:00-22:00", Order=22, GroupName="Trade Windows")]
+		[Display(Name="21:00–22:00", Order=22, GroupName="Trade Windows")]
 		[Browsable(false)]
 		public bool W21 { get; set; }
 
 		[NinjaScriptProperty]
-		[Display(Name="22:00-23:00", Order=23, GroupName="Trade Windows")]
+		[Display(Name="22:00–23:00", Order=23, GroupName="Trade Windows")]
 		[Browsable(false)]
 		public bool W22 { get; set; }
 
 		[NinjaScriptProperty]
-		[Display(Name="23:00-00:00", Order=24, GroupName="Trade Windows")]
+		[Display(Name="23:00–00:00", Order=24, GroupName="Trade Windows")]
 		[Browsable(false)]
 		public bool W23 { get; set; }
 
@@ -368,12 +368,13 @@ namespace NinjaTrader.NinjaScript.Strategies
 			if (State != State.Realtime)
 			    return;
 
+            // === End of session FLATTEN LOGIC ===
             if (ToTime(Time[0]) >= 235700 && ToTime(Time[0]) < 235800)
 			{
 				if (lastFlattenDate.Date != Time[0].Date)
 				{
 					lastFlattenDate = Time[0];
-					Print($"[{Time[0]}] [{EntrySignalName}] End of session FLATTEN -> all positions & orders cleared");
+					Print($"[{Time[0]}] [{EntrySignalName}] ❌ End of session FLATTEN → all positions & orders cleared");
 
 					if (Position.MarketPosition == MarketPosition.Long)
 						ExitLong(FlattenName, EntrySignalName);
@@ -389,6 +390,8 @@ namespace NinjaTrader.NinjaScript.Strategies
             if (CurrentBar < BarsRequiredToTrade) return;
             if (State != State.Realtime) return;
 
+			/// EXIT BLOCK
+            // R:R target uses the value captured from the entry signal's time window
             if (Position.MarketPosition == MarketPosition.Long)
 			{
 				double targetPrice = entryPrice + (riskPerTrade * positionRiskReward);
@@ -405,6 +408,7 @@ namespace NinjaTrader.NinjaScript.Strategies
             if (Position.MarketPosition != MarketPosition.Flat)
                 return;
 
+            // 🔹 TRADE WINDOW (ENTRY ONLY)
             bool inWindow = IsTradeWindow(Time[0]);
 
             if (inWindow != lastWindowState)
@@ -418,12 +422,14 @@ namespace NinjaTrader.NinjaScript.Strategies
                 if (longOrder != null &&
                     (longOrder.OrderState == OrderState.Working || longOrder.OrderState == OrderState.Accepted))
                 {
-                    Print($"[{Time[0]}] [{EntrySignalName}] Outside window -> cancelling pending order @ {longOrder.StopPrice}");
+                    Print($"[{Time[0]}] [{EntrySignalName}] ⏱ Outside window → cancelling pending order @ {longOrder.StopPrice}");
                     CancelOrder(longOrder);
                 }
                 return;
             }
 
+            // 🔹 Red candle logic
+			/// ENTRY BLOCK
             if (Close[0] < Open[0])
 			{
 				entryPrice = High[0];
@@ -438,14 +444,14 @@ namespace NinjaTrader.NinjaScript.Strategies
                     return;
                 }
 
-				Print($"[{Time[0]}] [{EntrySignalName}] Red candle detected -> evaluating entry");
+				Print($"[{Time[0]}] [{EntrySignalName}] 🔴 Red candle detected -> evaluating entry");
 				Print($"[{Time[0]}] [{EntrySignalName}] Entry={entryPrice} SL={pendingStopPrice} Risk={riskPerTrade}");
 
 				double ask = GetCurrentAsk();
 
 				if (ask >= entryPrice)
 				{
-					Print($"[{Time[0]}] [{EntrySignalName}] Gap above entry -> skipping stop placement");
+					Print($"[{Time[0]}] [{EntrySignalName}] ⚠️ Gap above entry → skipping stop placement");
 					return;
 				}
 
@@ -454,6 +460,7 @@ namespace NinjaTrader.NinjaScript.Strategies
 			}
         }
 
+		/// STOP-LOSS ORDERS BLOCK
         protected override void OnExecutionUpdate(Execution execution, string executionId,
             double price, int quantity, MarketPosition marketPosition, string orderId, DateTime time)
         {
@@ -471,7 +478,7 @@ namespace NinjaTrader.NinjaScript.Strategies
                         riskPerTrade = entryPrice - pendingStopPrice;
                         double limitPrice = pendingStopPrice - TickSize;
 
-                        Print($"[{time}] [{EntrySignalName}] Entry FILLED at {entryPrice} - Submitting STOP-LIMIT immediately");
+                        Print($"[{time}] [{EntrySignalName}] 🚀 Entry FILLED at {entryPrice} - Submitting STOP-LIMIT immediately");
                         Print($"[{time}] [{EntrySignalName}]    Stop={pendingStopPrice}, Limit={limitPrice}, Risk={riskPerTrade}");
 
 						ExitLongStopLimit(0, true, execution.Order.Filled, pendingStopPrice, pendingStopPrice, StopLossSignalName, EntrySignalName);
