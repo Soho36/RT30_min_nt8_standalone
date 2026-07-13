@@ -406,7 +406,7 @@ namespace NinjaTrader.NinjaScript.Strategies
 
         private void CancelActiveOrders(List<Order> orders)
         {
-            foreach (Order order in orders)
+            foreach (Order order in orders.ToArray())
             {
                 if (IsActiveOrder(order))
                     CancelOrder(order);
