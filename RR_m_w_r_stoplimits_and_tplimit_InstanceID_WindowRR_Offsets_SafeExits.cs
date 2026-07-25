@@ -407,7 +407,7 @@ namespace NinjaTrader.NinjaScript.Strategies
 
         private void CancelActiveOrders(List<Order> orders)
         {
-            foreach (Order order in orders)
+            foreach (Order order in orders.ToArray())
             {
                 if (IsActiveOrder(order))
                     CancelOrder(order);
@@ -470,6 +470,9 @@ namespace NinjaTrader.NinjaScript.Strategies
                 return;
 
             // 🔹 TRADE WINDOW (ENTRY ONLY)
+            if (takeProfitSubmitted || stopOrders.Count > 0 || takeProfitOrders.Count > 0)
+                ResetExitTracking();
+
             bool inWindow = IsTradeWindow(Time[0]);
 
             if (inWindow != lastWindowState)
@@ -516,6 +519,7 @@ namespace NinjaTrader.NinjaScript.Strategies
 					return;
 				}
 
+				ResetExitTracking();
 				longOrder = EnterLongStopLimit(0, true, EntryQuantity, entryPrice, entryPrice, EntrySignalName);
 				Print($"[{Time[0]}] [{EntrySignalName}] Submitted BUY STOP-LIMIT @ {entryPrice}");
 			}
@@ -527,6 +531,8 @@ namespace NinjaTrader.NinjaScript.Strategies
         {
             if (execution.Order != null && execution.Order.Name == EntrySignalName)
             {
+                takeProfitSubmitted = false;
+
                 if (quantity > 0 && pendingRiskReward > 0)
                     positionRiskReward = pendingRiskReward;
 
