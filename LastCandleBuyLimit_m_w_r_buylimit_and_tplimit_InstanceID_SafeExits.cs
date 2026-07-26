@@ -36,14 +36,12 @@ namespace NinjaTrader.NinjaScript.Strategies
         private double positionCandleRange;
         private readonly List<Order> stopOrders = new List<Order>();
         private readonly List<Order> takeProfitOrders = new List<Order>();
-        private DateTime lastFlattenDate = Core.Globals.MinDate;
         private bool lastWindowState = false;
 
         // Derived signal names — all unique per instance to prevent cross-instance interference
         private string EntrySignalName    => $"LastCandleBL_{InstanceId}";
         private string StopLossSignalName => $"StopLimit_{InstanceId}";
         private string TakeProfitName     => $"TP_Limit_{InstanceId}";
-        private string FlattenName        => $"DailyFlatten_{InstanceId}";
         private int EntryQuantity         => UseCustomQuantity ? CustomQuantity : DefaultQuantity;
 
 		// ===== INSTANCE ID =====
@@ -182,21 +180,6 @@ namespace NinjaTrader.NinjaScript.Strategies
 		[Display(Name="23:00–00:00", Order=24, GroupName="Trade Windows")]
 		public bool W23 { get; set; }
 
-        // ===== FLATTEN END OF SESSION =====
-        [NinjaScriptProperty]
-        [Display(Name = "Use Flatten End", Order = 0, GroupName = "Flatten End Of Session")]
-        public bool UseFlattenEnd { get; set; }
-
-        [NinjaScriptProperty]
-        [Range(0, 23)]
-        [Display(Name = "Flatten Hour", Order = 1, GroupName = "Flatten End Of Session")]
-        public int FlattenHour { get; set; }
-
-        [NinjaScriptProperty]
-        [Range(0, 59)]
-        [Display(Name = "Flatten Minute", Order = 2, GroupName = "Flatten End Of Session")]
-        public int FlattenMinute { get; set; }
-
         private bool[] tradeWindows;
 
         protected override void OnStateChange()
@@ -220,9 +203,6 @@ namespace NinjaTrader.NinjaScript.Strategies
                 CancelOnNewBar = true;
                 TPRangeMult = 1.0;
                 UseTradeWindow = true;
-                UseFlattenEnd = true;
-                FlattenHour = 23;
-                FlattenMinute = 57;
                 W00 = W01 = W02 = W03 = W04 = W05 = false;
                 W06 = W07 = W08 = W09 = W10 = W11 = false;
                 W12 = W13 = W14 = W15 = W16 = W17 = false;
@@ -291,43 +271,20 @@ namespace NinjaTrader.NinjaScript.Strategies
 
         private void CancelActiveOrders(List<Order> orders)
         {
-            foreach (Order order in orders)
+            // Enumerate a snapshot: CancelOrder makes NT8 re-enter OnOrderUpdate
+            // synchronously, which calls TrackOrder and may Add to this same list.
+            // Iterating the live list here would throw "Collection was modified".
+            foreach (Order order in orders.ToArray())
             {
                 if (IsActiveOrder(order))
                     CancelOrder(order);
             }
         }
 
-        private bool IsFlattenTime(DateTime time)
-        {
-            int flattenStart = FlattenHour * 10000 + FlattenMinute * 100;
-            int t = ToTime(time);
-            return t >= flattenStart && t < flattenStart + 100;
-        }
-
         protected override void OnBarUpdate()
         {
 			if (State != State.Realtime)
 			    return;
-
-            // === End of session FLATTEN LOGIC ===
-            if (UseFlattenEnd && IsFlattenTime(Time[0]))
-			{
-				if (lastFlattenDate.Date != Time[0].Date)
-				{
-					lastFlattenDate = Time[0];
-					Print($"[{Time[0]}] [{EntrySignalName}] ❌ End of session FLATTEN → all positions & orders cleared");
-
-					if (Position.MarketPosition == MarketPosition.Long)
-						ExitLong(FlattenName, EntrySignalName);
-
-					if (longOrder != null &&
-						(longOrder.OrderState == OrderState.Working ||
-						 longOrder.OrderState == OrderState.Accepted))
-						CancelOrder(longOrder);
-				}
-				return;
-			}
 
             if (CurrentBar < BarsRequiredToTrade) return;
             if (State != State.Realtime) return;
