@@ -25,6 +25,7 @@ namespace NinjaTrader.NinjaScript.Strategies
         private readonly List<Order> takeProfitOrders = new List<Order>();
         private DateTime lastFlattenDate = Core.Globals.MinDate;
         private bool lastWindowState = false;
+        private SessionIterator sessionIterator;
 
         // Derived signal names — all unique per instance to prevent cross-instance interference
         private string EntrySignalName    => $"Long1_{InstanceId}";
@@ -338,6 +339,8 @@ namespace NinjaTrader.NinjaScript.Strategies
             }
             else if (State == State.DataLoaded)
             {
+                sessionIterator = new SessionIterator(Bars);
+
                 W00 = RR00 > 0; W01 = RR01 > 0; W02 = RR02 > 0; W03 = RR03 > 0;
                 W04 = RR04 > 0; W05 = RR05 > 0; W06 = RR06 > 0; W07 = RR07 > 0;
                 W08 = RR08 > 0; W09 = RR09 > 0; W10 = RR10 > 0; W11 = RR11 > 0;
@@ -404,6 +407,34 @@ namespace NinjaTrader.NinjaScript.Strategies
         private double GetWindowRiskReward(DateTime time)
         {
             return windowRiskRewards[time.Hour];
+        }
+
+        // MT5 checks the window when the bar after the signal candle opens. Inside a
+        // session that is the signal bar's close, Time[0]. The session's last bar is
+        // stamped with the session end (e.g. 00:00), but NinjaTrader only processes it on
+        // the next session's first tick, and MT5 only sees it once that session opens - so
+        // it belongs to the next session's opening-hour window, as in the MT5 backtests.
+        private DateTime GetSignalWindowTime()
+        {
+            if (sessionIterator == null)
+                return Time[0];
+
+            sessionIterator.GetNextSession(Time[0], true);
+            if (Time[0] < sessionIterator.ActualSessionEnd)
+                return Time[0];
+
+            // Excluding the end stamp moves past the session this bar closed.
+            sessionIterator.GetNextSession(Time[0], false);
+            DateTime nextSessionBegin = sessionIterator.ActualSessionBegin;
+            return nextSessionBegin > Time[0] ? nextSessionBegin : Time[0];
+        }
+
+        // With Calculate.OnBarClose the signal bar is closed by the first tick of the next
+        // bar, which realtime Bars already holds. NaN when that bar is not available.
+        private double GetNextBarHigh()
+        {
+            int next = CurrentBar + 1;
+            return Bars != null && Bars.Count > next ? Bars.GetHigh(next) : double.NaN;
         }
 
         private bool IsActiveOrder(Order order)
@@ -502,7 +533,8 @@ namespace NinjaTrader.NinjaScript.Strategies
             if (takeProfitSubmitted || stopOrders.Count > 0 || takeProfitOrders.Count > 0)
                 ResetExitTracking();
 
-            bool inWindow = IsTradeWindow(Time[0]);
+            DateTime windowTime = GetSignalWindowTime();
+            bool inWindow = IsTradeWindow(windowTime);
 
             if (inWindow != lastWindowState)
             {
@@ -541,7 +573,11 @@ namespace NinjaTrader.NinjaScript.Strategies
 				entryPrice = High[0];
 				pendingStopPrice = Low[0];
 				riskPerTrade = entryPrice - pendingStopPrice;
-				pendingRiskReward = GetWindowRiskReward(Time[0]);
+                if (windowTime != Time[0])
+                    Print($"[{Time[0]}] [{EntrySignalName}] Session-open signal: previous session's last candle "
+                        + $"evaluated for the {windowTime:HH:mm} window");
+
+				pendingRiskReward = GetWindowRiskReward(windowTime);
 				Print($"[{Time[0]}] [{EntrySignalName}] Window R:R={pendingRiskReward}");
 
                 if (pendingRiskReward <= 0)
@@ -554,10 +590,16 @@ namespace NinjaTrader.NinjaScript.Strategies
 				Print($"[{Time[0]}] [{EntrySignalName}] Entry={entryPrice} SL={pendingStopPrice} Risk={riskPerTrade}");
 
 				double ask = GetCurrentAsk();
+				// The bar after the signal has already started; its high is every trade
+				// printed since. At a session open the ask can still be the previous
+				// session's stale quote, but this bar's high is the new session's price.
+				double nextBarHigh = GetNextBarHigh();
 
-				if (ask >= entryPrice)
+				if (ask >= entryPrice
+					|| (!double.IsNaN(nextBarHigh) && nextBarHigh >= entryPrice))
 				{
-					Print($"[{Time[0]}] [{EntrySignalName}] ⚠️ Gap above entry → skipping stop placement");
+					Print($"[{Time[0]}] [{EntrySignalName}] ⚠️ Gap above entry → skipping stop placement "
+						+ $"(entry={entryPrice}, ask={ask}, next bar high={nextBarHigh})");
 					return;
 				}
 
