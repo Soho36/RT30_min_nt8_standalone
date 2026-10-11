@@ -1,0 +1,139 @@
+using System;
+using System.Collections.Generic;
+using TimeoutModel;
+namespace Core { public static class Globals { public static DateTime MinDate = DateTime.MinValue; public static DateTime Now; } }
+namespace TimeoutModel
+{
+    public enum State { Historical, Realtime, Terminated }
+    public enum MarketPosition { Flat, Long, Short }
+    public enum OrderState { Initialized, Submitted, Accepted, Working, PartFilled, ChangePending, ChangeSubmitted, CancelPending, CancelSubmitted, Cancelled, Rejected, Filled, Unknown }
+    public enum OrderType { StopLimit, Limit, Market }
+    public enum OrderAction { Sell, Buy }
+    public class Position { public MarketPosition MarketPosition = MarketPosition.Long; public int Quantity = 10; }
+    public class Execution { public Order Order; }
+    public class Order
+    {
+        public string Name;
+        public OrderState OrderState = OrderState.Working;
+        public OrderType OrderType = OrderType.StopLimit;
+        public OrderAction OrderAction = OrderAction.Sell;
+        public double StopPrice = 100;
+        public int Filled;
+        public int Quantity = 10;
+        public static bool IsTerminalState(OrderState state) { return state == OrderState.Filled || state == OrderState.Cancelled || state == OrderState.Rejected; }
+    }
+}
+public class TimeoutHarness
+{
+    /* FIELDS */
+    /* METHODS */
+    private readonly object exitOrdersSync = new object();
+    private readonly List<Order> stopOrders = new List<Order>();
+    private readonly List<Order> takeProfitOrders = new List<Order>();
+    public State State = State.Realtime;
+    public Position Position = new Position();
+    public int InstanceId = 17;
+    private string EntrySignalName => "Long1_17";
+    private string StopLossSignalName => "StopLimit_17";
+    private string TakeProfitName => "RR_Limit_17";
+    public int Submissions;
+    public int SubmittedQuantity;
+    public int Cancels;
+    public bool ReturnNull;
+    public bool ThrowSubmit;
+    public bool SynchronousFill;
+    public bool AutoConfirmCancels;
+    public Action<Order> OnCancel;
+    public Action<object> QueuedEvent;
+    public bool DeferEvent;
+    public Order Stop;
+    public Order Market;
+    public DateTime Triggered => stopTriggeredAt;
+    public bool Active => IsStopFallbackActive();
+    public TimeoutHarness()
+    {
+        Core.Globals.Now = new DateTime(2026, 10, 12, 12, 0, 0);
+        Stop = new Order { Name = StopLossSignalName };
+        stopOrders.Add(Stop);
+    }
+    private void Print(string text) { }
+    private void TriggerCustomEvent(Action<object> callback, object state)
+    {
+        if (DeferEvent) QueuedEvent = callback;
+        else callback(state);
+    }
+    private void CancelOrder(Order order)
+    {
+        Cancels++;
+        order.OrderState = AutoConfirmCancels ? OrderState.Cancelled : OrderState.CancelSubmitted;
+        if (OnCancel != null) OnCancel(order);
+    }
+    private Order ExitLong(int bars, int quantity, string signal, string entrySignal)
+    {
+        if (bars != 0 || signal != StopFallbackName || entrySignal != EntrySignalName) throw new Exception("Incorrect scope");
+        Submissions++;
+        SubmittedQuantity = quantity;
+        if (ThrowSubmit) throw new Exception("Submission unavailable");
+        if (ReturnNull) return null;
+        Market = new Order { Name = signal, OrderState = OrderState.Accepted, OrderType = OrderType.Market, Quantity = quantity };
+        stopFallbackOrder = Market; // Simulate synchronous OnOrderUpdate.
+        if (SynchronousFill) FillMarket(quantity);
+        return Market;
+    }
+    public void Price(double price) { ObserveStopTrigger(price); }
+    public void Poll(double seconds) { Core.Globals.Now = Core.Globals.Now.AddSeconds(seconds); CheckStopFallback(); }
+    public void TimerPoll() { OnStopFallbackTimer(null, null); }
+    public void ConfirmStopCancel() { Stop.OrderState = OrderState.Cancelled; }
+    public void Execute(Order order, int quantity) { RecordStopFallbackExecution(new Execution { Order = order }, quantity); }
+    public void FillMarket(int quantity)
+    {
+        Market.Filled += quantity;
+        Market.OrderState = Market.Filled == Market.Quantity ? OrderState.Filled : OrderState.PartFilled;
+        stopFallbackOrder = Market;
+        Position.Quantity -= quantity;
+        if (Position.Quantity == 0) Position.MarketPosition = MarketPosition.Flat;
+        Execute(Market, quantity);
+    }
+    public void AddPendingEntry()
+    {
+        stopFallbackEntryOrder = new Order { Name = EntrySignalName, Filled = 5, OrderAction = OrderAction.Buy };
+        Execute(stopFallbackEntryOrder, 5);
+    }
+    public void ConfirmEntryCancel() { stopFallbackEntryOrder.OrderState = OrderState.Cancelled; }
+    public Order AddTarget() { var target = new Order { Name = TakeProfitName, OrderType = OrderType.Limit }; takeProfitOrders.Add(target); return target; }
+    public void AddStop() { stopOrders.Add(new Order { Name = StopLossSignalName }); }
+    public void ClearForNewTrade() { stopOrders.Clear(); takeProfitOrders.Clear(); ResetStopFallback(); Stop = new Order { Name = StopLossSignalName }; stopOrders.Add(Stop); Position = new Position(); }
+}
+public static class TimeoutTests
+{
+    private static int cases;
+    private static void Assert(bool value, string message) { if (!value) throw new Exception(message); }
+    private static void Case(string name, Action test) { test(); cases++; Console.WriteLine("PASS " + name); }
+    private static TimeoutHarness Ready() { var h = new TimeoutHarness(); h.AutoConfirmCancels = true; return h; }
+    public static void Run()
+    {
+        Case("No price trigger", () => { var h = Ready(); h.Price(101); h.Poll(120); Assert(h.Submissions == 0 && h.Cancels == 0, "Early exit"); });
+        Case("Deadline boundary", () => { var h = Ready(); h.Price(100); h.Poll(59.999); Assert(h.Submissions == 0, "Before 60s"); h.Poll(.001); Assert(h.Submissions == 1 && h.SubmittedQuantity == 10, "Deadline missed"); });
+        Case("Recovered price does not reset clock", () => { var h = Ready(); h.Price(99); var t = h.Triggered; h.Poll(30); h.Price(110); h.Price(99); h.Poll(30); Assert(h.Triggered == t && h.Submissions == 1, "Trigger reset"); });
+        Case("Normal full stop fill", () => { var h = Ready(); h.Price(99); h.Stop.Filled = 10; h.Stop.OrderState = OrderState.Filled; h.Position.MarketPosition = MarketPosition.Flat; h.Position.Quantity = 0; h.Execute(h.Stop, 10); h.Poll(60); Assert(h.Submissions == 0, "Unnecessary sell"); });
+        Case("Wait for cancellation confirmation", () => { var h = new TimeoutHarness(); h.Price(99); h.Poll(60); Assert(h.Active && h.Submissions == 0 && h.Cancels == 1, "Sold before cancel"); h.Poll(1); Assert(h.Cancels == 1, "Repeated pending cancel"); h.ConfirmStopCancel(); h.Poll(0); Assert(h.Submissions == 1, "No fallback"); });
+        Case("Partial stop fill sells remainder", () => { var h = Ready(); h.Price(99); h.Stop.Filled = 4; h.Stop.OrderState = OrderState.PartFilled; h.Position.Quantity = 6; h.Execute(h.Stop, 4); h.Poll(60); Assert(h.SubmittedQuantity == 6, "Wrong remainder"); });
+        Case("Terminal order update before execution", () => { var h = Ready(); h.Price(99); h.OnCancel = o => { o.Filled = 3; }; h.Poll(60); Assert(h.Submissions == 0, "Sold using stale position"); h.Position.Quantity = 7; h.Execute(h.Stop, 3); h.OnCancel = null; h.Poll(.5); Assert(h.SubmittedQuantity == 7, "Late fill missed"); });
+        Case("Full fill during cancellation", () => { var h = Ready(); h.Price(99); h.OnCancel = o => { o.Filled = 10; o.OrderState = OrderState.Filled; }; h.Poll(60); Assert(h.Submissions == 0, "Sold before execution"); h.Position.Quantity = 0; h.Position.MarketPosition = MarketPosition.Flat; h.Execute(h.Stop, 10); h.Poll(.5); Assert(h.Submissions == 0 && !h.Active, "Double exit"); });
+        Case("Outstanding entry must cancel", () => { var h = new TimeoutHarness(); h.AddPendingEntry(); h.Price(99); h.Poll(60); h.ConfirmStopCancel(); h.Poll(1); Assert(h.Submissions == 0, "Entry still working"); h.ConfirmEntryCancel(); h.Poll(0); Assert(h.Submissions == 1, "Entry cancellation stalled"); });
+        Case("Stopped-out partial entry retains timeout", () => { var h = Ready(); h.AddPendingEntry(); h.Price(99); h.Stop.Filled = 10; h.Stop.OrderState = OrderState.Filled; h.Execute(h.Stop, 10); h.Position.Quantity = 0; h.Position.MarketPosition = MarketPosition.Flat; h.Poll(30); Assert(h.Active, "Flat bar could reset timeout with live buy remainder"); h.Poll(30); Assert(h.Cancels == 1 && h.Submissions == 0 && !h.Active, "Did not cancel remaining buy"); });
+        Case("Target must cancel", () => { var h = new TimeoutHarness(); var target = h.AddTarget(); h.Price(99); h.Poll(60); h.ConfirmStopCancel(); h.Poll(1); Assert(h.Submissions == 0, "Target still working"); target.OrderState = OrderState.Cancelled; h.Poll(0); Assert(h.Submissions == 1, "Target cancel stalled"); });
+        Case("No duplicate market orders", () => { var h = Ready(); h.Price(99); h.Poll(60); h.Poll(120); Assert(h.Submissions == 1, "Duplicate submission"); h.FillMarket(4); h.Poll(60); Assert(h.Submissions == 1, "Partial market fill duplicated"); });
+        Case("Null submit retries with throttle", () => { var h = Ready(); h.ReturnNull = true; h.Price(99); h.Poll(60); h.Poll(.5); Assert(h.Submissions == 1, "Retry storm"); h.ReturnNull = false; h.Poll(.5); Assert(h.Submissions == 2, "No retry"); });
+        Case("Rejected market retries", () => { var h = Ready(); h.Price(99); h.Poll(60); h.Market.OrderState = OrderState.Rejected; h.Poll(1); Assert(h.Submissions == 2, "No rejection retry"); });
+        Case("Cancelled partial market waits for execution", () => { var h = Ready(); h.Price(99); h.Poll(60); var market = h.Market; market.Filled = 3; market.OrderState = OrderState.Cancelled; h.Poll(1); Assert(h.Submissions == 1, "Retried before market execution"); h.Position.Quantity = 7; h.Execute(market, 3); h.Poll(.5); Assert(h.Submissions == 2 && h.SubmittedQuantity == 7, "Market remainder incorrect"); });
+        Case("Submission exception retries", () => { var h = Ready(); h.ThrowSubmit = true; h.Price(99); h.Poll(60); h.ThrowSubmit = false; h.Poll(1); Assert(h.Submissions == 2, "Exception stopped fallback"); });
+        Case("Synchronous market execution", () => { var h = Ready(); h.SynchronousFill = true; h.Price(99); h.Poll(60); h.Poll(1); Assert(h.Submissions == 1 && !h.Active, "Terminal order resurrected"); });
+        Case("Callback mutates order list", () => { var h = Ready(); bool once = false; h.OnCancel = o => { if (!once) { once = true; h.AddStop(); } }; h.Price(99); h.Poll(60); Assert(h.Submissions == 0, "Uncancelled new stop"); h.Poll(.5); Assert(h.Submissions == 1, "Snapshot cancellation stalled"); });
+        Case("Timer runs without more ticks", () => { var h = Ready(); h.Price(99); Core.Globals.Now = Core.Globals.Now.AddSeconds(60); h.TimerPoll(); h.TimerPoll(); Assert(h.Submissions == 1, "Timer missed exit"); });
+        Case("Queued timer coalesces", () => { var h = Ready(); h.DeferEvent = true; h.Price(99); Core.Globals.Now = Core.Globals.Now.AddSeconds(60); h.TimerPoll(); var first = h.QueuedEvent; h.TimerPoll(); Assert(ReferenceEquals(first, h.QueuedEvent), "Duplicate queued timer"); first(null); Assert(h.Submissions == 1, "Queued exit missed"); });
+        Case("New trade has new clock", () => { var h = Ready(); h.Price(99); h.Poll(60); h.FillMarket(10); h.Poll(1); h.ClearForNewTrade(); h.Price(99); h.Poll(59); Assert(h.Submissions == 1, "Stale trigger"); h.Poll(1); Assert(h.Submissions == 2, "New trigger missed"); });
+        Case("Terminated strategy does nothing", () => { var h = Ready(); h.Price(99); h.State = State.Terminated; h.Poll(120); h.TimerPoll(); Assert(h.Submissions == 0, "Ran after termination"); });
+        Console.WriteLine(cases + " timeout cases passed.");
+    }
+}
