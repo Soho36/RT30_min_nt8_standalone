@@ -1,8 +1,10 @@
-# One-minute stop-limit fallback
+# Stop-limit Timeouts
 
 Applied to the standalone and routed `SafeExits_MaxRedRun` strategies on
-2026-10-12. The class names and settings are unchanged; the timeout is always
-enabled and fixed at 60 seconds.
+2026-10-12. The class names and settings are unchanged. Both timeouts are always
+enabled: 60 seconds for protective stops and 25 minutes for entry orders.
+
+## Protective Stops
 
 The first realtime last-trade tick at or below an outstanding sell stop-limit's
 stop price starts the clock. A reported partial stop fill also arms it if the
@@ -28,6 +30,27 @@ Broker cancellation confirmations can delay submission beyond 60 seconds;
 the script waits rather than leave the old exit able to fill alongside a new
 sell order. Market execution can slip and is not a price or loss guarantee.
 
+## Entry Orders
+
+The first realtime last-trade tick at or above an outstanding buy stop-limit's
+stop price starts a separate 25-minute clock. A partial entry fill also starts
+it if the price tick was missed. When the clock expires, the timer cancels the
+unfilled entry remainder; it never converts the entry to a market buy or closes
+the filled portion. Filled quantity keeps normal stop-loss/target management.
+
+The 25 minutes are measured from the first observed trigger, not the bar opening.
+For example, a 07:03 trigger expires at 07:28, and a 07:20 trigger expires at 07:45.
+Price recovery and repricing the same Order object do not restart the clock.
+A genuinely new Order object gets a fresh watch. Exit-tracking resets do not
+erase the entry clock. Untriggered entries keep their existing behavior; window,
+session and rejected-signal rules can still cancel orders earlier.
+
+Cancellation retries after a failure are limited to once per second. A pending
+cancel blocks replacement entries until cancellation and any reported late fills
+are processed, while existing positions still receive normal exits. Routed seats
+remain reserved during this interval. This uses the same client-side timer as
+stop protection, with the same running/connection requirements.
+
 ## Verification
 
 Run in PowerShell 7:
@@ -36,7 +59,7 @@ Run in PowerShell 7:
 .\verify_stop_timeout.ps1
 ```
 
-This runs 22 scenarios against the actual fallback methods extracted from each
+This runs 37 scenarios against the actual timeout methods extracted from each
 source and compiles both complete scripts plus `PropRouter.cs` against the locally
 installed NT8 assemblies. It does not run NinjaTrader's managed-order engine or a
 broker. Before live use, compile the strategies in NinjaTrader and verify a

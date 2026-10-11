@@ -9,12 +9,14 @@ for ($index = 0; $index -lt $sources.Count; $index++) {
     $source = [IO.File]::ReadAllText($sources[$index])
     $fieldsStart = $source.IndexOf('        // Stop-limit escape')
     $fieldsEnd = $source.IndexOf("`n", $source.IndexOf('private string StopFallbackName', $fieldsStart))
-    $methodsStart = $source.IndexOf('        private void StartStopFallbackTimer()')
+    $entryFieldsStart = $source.IndexOf('        private Order entryTimeoutOrder;')
+    $methodsStart = $source.IndexOf('        private void ResetEntryTimeoutTracking()')
     $methodsEnd = $source.IndexOf('        private bool ExceedsMaxRedRun()', $methodsStart)
-    if ($fieldsStart -lt 0 -or $fieldsEnd -lt 0 -or $methodsStart -lt 0 -or $methodsEnd -lt 0) {
+    if ($entryFieldsStart -lt 0 -or $fieldsStart -lt 0 -or $fieldsEnd -lt 0 -or $methodsStart -lt 0 -or $methodsEnd -lt 0) {
         throw "Missing timeout implementation in $($sources[$index])"
     }
-    $code = $template.Replace('/* FIELDS */', $source.Substring($fieldsStart, $fieldsEnd - $fieldsStart))
+    $fields = $source.Substring($entryFieldsStart, $fieldsStart - $entryFieldsStart) + $source.Substring($fieldsStart, $fieldsEnd - $fieldsStart)
+    $code = $template.Replace('/* FIELDS */', $fields)
     $code = $code.Replace('/* METHODS */', $source.Substring($methodsStart, $methodsEnd - $methodsStart))
     $code = $code.Replace('TimeoutTests', "TimeoutTests$index").Replace('TimeoutHarness', "TimeoutHarness$index")
     $code = $code.Replace('namespace Core', "namespace TestCore$index").Replace('Core.Globals', "TestCore$index.Globals")

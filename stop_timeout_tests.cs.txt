@@ -41,6 +41,7 @@ public class TimeoutHarness
     public int Cancels;
     public bool ReturnNull;
     public bool ThrowSubmit;
+    public bool ThrowCancel;
     public bool SynchronousFill;
     public bool AutoConfirmCancels;
     public Action<Order> OnCancel;
@@ -50,6 +51,8 @@ public class TimeoutHarness
     public Order Market;
     public DateTime Triggered => stopTriggeredAt;
     public bool Active => IsStopFallbackActive();
+    public bool EntryCancelPending => IsEntryTimeoutCancellationPending();
+    public DateTime EntryTriggered => entryTriggeredAt;
     public TimeoutHarness()
     {
         Core.Globals.Now = new DateTime(2026, 10, 12, 12, 0, 0);
@@ -65,6 +68,7 @@ public class TimeoutHarness
     private void CancelOrder(Order order)
     {
         Cancels++;
+        if (ThrowCancel) throw new Exception("Cancellation unavailable");
         order.OrderState = AutoConfirmCancels ? OrderState.Cancelled : OrderState.CancelSubmitted;
         if (OnCancel != null) OnCancel(order);
     }
@@ -80,11 +84,14 @@ public class TimeoutHarness
         if (SynchronousFill) FillMarket(quantity);
         return Market;
     }
-    public void Price(double price) { ObserveStopTrigger(price); }
-    public void Poll(double seconds) { Core.Globals.Now = Core.Globals.Now.AddSeconds(seconds); CheckStopFallback(); }
+    public void Price(double price) { ObserveEntryTrigger(price); ObserveStopTrigger(price); }
+    public void Poll(double seconds) { Core.Globals.Now = Core.Globals.Now.AddSeconds(seconds); CheckStopFallback(); CheckEntryTimeout(); }
     public void TimerPoll() { OnStopFallbackTimer(null, null); }
     public void ConfirmStopCancel() { Stop.OrderState = OrderState.Cancelled; }
-    public void Execute(Order order, int quantity) { RecordStopFallbackExecution(new Execution { Order = order }, quantity); }
+    public void Execute(Order order, int quantity) { var execution = new Execution { Order = order }; RecordEntryTimeoutExecution(execution, quantity); RecordStopFallbackExecution(execution, quantity); }
+    public void WatchEntry(Order order) { TrackEntryTimeoutOrder(order, order.OrderState, order.Filled, order.Quantity); }
+    public Order NewEntry() { var entry = new Order { Name = EntrySignalName, OrderAction = OrderAction.Buy, StopPrice = 105 }; WatchEntry(entry); return entry; }
+    public void ResetExitsOnly() { ResetStopFallback(); }
     public void FillMarket(int quantity)
     {
         Market.Filled += quantity;
@@ -110,6 +117,7 @@ public static class TimeoutTests
     private static void Assert(bool value, string message) { if (!value) throw new Exception(message); }
     private static void Case(string name, Action test) { test(); cases++; Console.WriteLine("PASS " + name); }
     private static TimeoutHarness Ready() { var h = new TimeoutHarness(); h.AutoConfirmCancels = true; return h; }
+    private static TimeoutHarness FlatEntry() { var h = Ready(); h.Position.MarketPosition = MarketPosition.Flat; h.Position.Quantity = 0; return h; }
     public static void Run()
     {
         Case("No price trigger", () => { var h = Ready(); h.Price(101); h.Poll(120); Assert(h.Submissions == 0 && h.Cancels == 0, "Early exit"); });
@@ -134,6 +142,21 @@ public static class TimeoutTests
         Case("Queued timer coalesces", () => { var h = Ready(); h.DeferEvent = true; h.Price(99); Core.Globals.Now = Core.Globals.Now.AddSeconds(60); h.TimerPoll(); var first = h.QueuedEvent; h.TimerPoll(); Assert(ReferenceEquals(first, h.QueuedEvent), "Duplicate queued timer"); first(null); Assert(h.Submissions == 1, "Queued exit missed"); });
         Case("New trade has new clock", () => { var h = Ready(); h.Price(99); h.Poll(60); h.FillMarket(10); h.Poll(1); h.ClearForNewTrade(); h.Price(99); h.Poll(59); Assert(h.Submissions == 1, "Stale trigger"); h.Poll(1); Assert(h.Submissions == 2, "New trigger missed"); });
         Case("Terminated strategy does nothing", () => { var h = Ready(); h.Price(99); h.State = State.Terminated; h.Poll(120); h.TimerPoll(); Assert(h.Submissions == 0, "Ran after termination"); });
+        Case("Entry below trigger stays working", () => { var h = FlatEntry(); var entry = h.NewEntry(); h.Price(104); h.Poll(3600); Assert(h.Cancels == 0 && entry.OrderState == OrderState.Working, "Cancelled an untriggered entry"); });
+        Case("Entry 25-minute deadline", () => { var h = FlatEntry(); var entry = h.NewEntry(); h.Price(106); h.Poll(1499.999); Assert(h.Cancels == 0, "Entry cancelled early"); h.Poll(.001); Assert(h.Cancels == 1 && entry.OrderState == OrderState.Cancelled && h.Submissions == 0, "Did not cancel at 25 minutes"); });
+        Case("Entry recovery preserves trigger", () => { var h = FlatEntry(); h.NewEntry(); h.Price(106); var t = h.EntryTriggered; h.Poll(600); h.Price(104); h.Price(106); Assert(h.EntryTriggered == t, "Entry clock restarted"); h.Poll(900); Assert(h.Cancels == 1, "Recovery disarmed expiry"); });
+        Case("Fully filled entry does not expire", () => { var h = FlatEntry(); var entry = h.NewEntry(); h.Price(106); entry.Filled = 10; entry.OrderState = OrderState.Filled; h.Execute(entry, 10); h.Position.Quantity = 10; h.Position.MarketPosition = MarketPosition.Long; h.Poll(1500); Assert(h.Cancels == 0 && h.Submissions == 0, "Cancelled a filled entry or exited position"); });
+        Case("Partly filled entry only cancels remainder", () => { var h = FlatEntry(); var entry = h.NewEntry(); h.Price(106); entry.Filled = 4; entry.OrderState = OrderState.PartFilled; h.Execute(entry, 4); h.Position.Quantity = 4; h.Position.MarketPosition = MarketPosition.Long; h.Poll(1500); Assert(entry.OrderState == OrderState.Cancelled && h.Stop.OrderState == OrderState.Working && h.Position.Quantity == 4 && h.Submissions == 0, "Changed existing position or stop"); });
+        Case("Partial entry fill arms without price tick", () => { var h = FlatEntry(); var entry = h.NewEntry(); entry.Filled = 3; entry.OrderState = OrderState.PartFilled; h.WatchEntry(entry); h.Execute(entry, 3); h.Position.Quantity = 3; h.Position.MarketPosition = MarketPosition.Long; h.Poll(1500); Assert(h.Cancels == 1 && h.Submissions == 0, "Partial fill did not arm entry timer"); });
+        Case("Exit reset preserves entry clock", () => { var h = FlatEntry(); h.NewEntry(); h.Price(106); h.Poll(600); h.ResetExitsOnly(); h.Poll(900); Assert(h.Cancels == 1, "Exit reset cleared entry timeout"); });
+        Case("Same-order reprice preserves entry clock", () => { var h = FlatEntry(); var entry = h.NewEntry(); h.Price(106); h.Poll(600); entry.StopPrice = 110; entry.OrderState = OrderState.ChangePending; h.WatchEntry(entry); h.Poll(900); Assert(h.Cancels == 1, "Reprice extended expiry"); });
+        Case("New entry has independent deadline", () => { var h = FlatEntry(); var first = h.NewEntry(); h.Price(106); h.Poll(600); first.OrderState = OrderState.Cancelled; h.WatchEntry(first); var next = h.NewEntry(); h.Price(106); h.Poll(1499); Assert(h.Cancels == 0, "Inherited old deadline"); h.Poll(1); Assert(h.Cancels == 1 && next.OrderState == OrderState.Cancelled, "New deadline missed"); });
+        Case("Entry waits for cancellation confirmation", () => { var h = FlatEntry(); h.AutoConfirmCancels = false; var entry = h.NewEntry(); h.Price(106); h.Poll(1500); Assert(h.EntryCancelPending && h.Cancels == 1, "Entry not blocked during cancel"); h.Poll(10); Assert(h.Cancels == 1, "Duplicate pending cancel"); entry.OrderState = OrderState.Cancelled; h.WatchEntry(entry); Assert(!h.EntryCancelPending, "Cancellation did not settle"); });
+        Case("Entry fill during cancellation accounted", () => { var h = FlatEntry(); var entry = h.NewEntry(); h.Price(106); h.OnCancel = o => { o.Filled = 3; }; h.Poll(1500); Assert(h.EntryCancelPending, "Allowed new entry before late fill"); h.Execute(entry, 3); h.Position.Quantity = 3; h.Position.MarketPosition = MarketPosition.Long; h.Poll(.5); Assert(!h.EntryCancelPending && h.Submissions == 0 && h.Stop.OrderState == OrderState.Working, "Did not preserve late fill management"); });
+        Case("Entry timer expires without more ticks", () => { var h = FlatEntry(); var entry = h.NewEntry(); h.Price(106); Core.Globals.Now = Core.Globals.Now.AddMinutes(25); h.TimerPoll(); Assert(h.Cancels == 1 && entry.OrderState == OrderState.Cancelled, "Entry relied on further ticks"); });
+        Case("Late old terminal callback ignored", () => { var h = FlatEntry(); var first = h.NewEntry(); first.OrderState = OrderState.Cancelled; var next = h.NewEntry(); h.Price(106); h.WatchEntry(first); h.Poll(1500); Assert(h.Cancels == 1 && next.OrderState == OrderState.Cancelled, "Old callback replaced current entry"); });
+        Case("Entry cancellation exceptions retry with throttle", () => { var h = FlatEntry(); var entry = h.NewEntry(); h.ThrowCancel = true; h.Price(106); h.Poll(1500); Assert(h.EntryCancelPending && h.Cancels == 1, "Cancellation failure lost watch"); h.Poll(.5); Assert(h.Cancels == 1, "Cancellation retry storm"); h.ThrowCancel = false; h.Poll(.5); Assert(h.Cancels == 2 && entry.OrderState == OrderState.Cancelled, "Cancellation did not retry"); });
+        Case("Terminated strategy does not expire entry", () => { var h = FlatEntry(); h.NewEntry(); h.Price(106); h.State = State.Terminated; h.Poll(3600); h.TimerPoll(); Assert(h.Cancels == 0, "Entry timeout ran after termination"); });
         Console.WriteLine(cases + " timeout cases passed.");
     }
 }
