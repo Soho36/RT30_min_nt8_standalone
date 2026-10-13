@@ -1,17 +1,22 @@
-param([string]$RoutedSource = 'I:\PycharmProjects\Accounts_staggering\nt8\RR_m_w_r_stoplimits_and_tplimit_InstanceID_WindowRR_Offsets_SafeExits_Routed_MaxRedRun.cs')
+param(
+    [string]$RoutedSource = 'I:\PycharmProjects\Accounts_staggering\nt8\RR_m_w_r_stoplimits_and_tplimit_InstanceID_WindowRR_Offsets_SafeExits_Routed_MaxRedRun.cs',
+    [string]$GgSource = (Join-Path $PSScriptRoot 'GG_m_w_r_stoplimits_and_tplimit_InstanceID_WindowRR_Offsets_SafeExits.cs'),
+    [string]$SourceRoot = $PSScriptRoot
+)
 $ErrorActionPreference = 'Stop'
 $sources = @(
-    (Join-Path $PSScriptRoot 'RR_m_w_r_stoplimits_and_tplimit_InstanceID_WindowRR_Offsets_SafeExits_MaxRedRun.cs'),
-    $RoutedSource
+    (Join-Path $SourceRoot 'RR_m_w_r_stoplimits_and_tplimit_InstanceID_WindowRR_Offsets_SafeExits_MaxRedRun.cs'),
+    $RoutedSource,
+    $GgSource
 )
-$template = [IO.File]::ReadAllText((Join-Path $PSScriptRoot 'stop_timeout_tests.cs.txt'))
+$template = [IO.File]::ReadAllText((Join-Path $SourceRoot 'stop_timeout_tests.cs.txt'))
 for ($index = 0; $index -lt $sources.Count; $index++) {
     $source = [IO.File]::ReadAllText($sources[$index])
     $fieldsStart = $source.IndexOf('        // Stop-limit escape')
     $fieldsEnd = $source.IndexOf("`n", $source.IndexOf('private string StopFallbackName', $fieldsStart))
     $entryFieldsStart = $source.IndexOf('        private Order entryTimeoutOrder;')
     $methodsStart = $source.IndexOf('        private void ResetEntryTimeoutTracking()')
-    $methodsEnd = $source.IndexOf('        private bool ExceedsMaxRedRun()', $methodsStart)
+    $methodsEnd = $source.IndexOf('        private bool ExceedsMax', $methodsStart)
     if ($entryFieldsStart -lt 0 -or $fieldsStart -lt 0 -or $fieldsEnd -lt 0 -or $methodsStart -lt 0 -or $methodsEnd -lt 0) {
         throw "Missing timeout implementation in $($sources[$index])"
     }
@@ -28,6 +33,34 @@ for ($index = 0; $index -lt $sources.Count; $index++) {
 }
 
 # Compile the complete strategies and real router against installed NT8 assemblies.
+$rrText = [IO.File]::ReadAllText($sources[0]).Replace("`r`n", "`n").TrimEnd()
+$ggText = [IO.File]::ReadAllText($GgSource).Replace("`r`n", "`n").TrimEnd()
+$rrText = [regex]::Replace($rrText, '(?m)[\t ]+$', '')
+$ggText = [regex]::Replace($ggText, '(?m)[\t ]+$', '')
+$expectedGg = $rrText.Replace('RRLongTimeWinStopLimitTPlimitGAPWindowRROffsetsSafeExitsMaxRedRun', 'GGLongTimeWinStopLimitTPlimitGAPWindowRROffsetsSafeExits')
+$expectedGg = $expectedGg.Replace('MaxRedRun', 'MaxGreenRun').Replace('redRun', 'greenRun')
+$colorMap = [System.Collections.Generic.Dictionary[string, string]]::new([StringComparer]::Ordinal)
+$colorMap.Add('RED', 'GREEN')
+$colorMap.Add('Red', 'Green')
+$colorMap.Add('red', 'green')
+$colorMap.Add('reds', 'greens')
+$colorMap.Add('Green', 'Red')
+$colorMap.Add('green', 'red')
+$expectedGg = [regex]::Replace($expectedGg, '\b(RED|Red|red|reds|Green|green)\b', [System.Text.RegularExpressions.MatchEvaluator]{ param($match) $colorMap[$match.Value] })
+$expectedGg = $expectedGg.Replace([char]::ConvertFromUtf32(0x1F534), [char]::ConvertFromUtf32(0x1F7E2))
+$expectedGg = $expectedGg.Replace('if (Close[barsAgo] >= Open[barsAgo])', 'if (Close[barsAgo] <= Open[barsAgo])')
+$expectedGg = $expectedGg.Replace('if (Close[0] < Open[0])', 'if (Close[0] > Open[0])')
+if ($ggText -cne $expectedGg) { throw 'GG differs from latest RR beyond strategy identity and candle-color changes.' }
+Write-Host 'GG matches latest standalone RR after identity and candle-color substitutions.'
+
+$filterStart = $ggText.IndexOf('        private bool ExceedsMaxGreenRun()')
+$filterEnd = $ggText.IndexOf('        private bool IsTradeWindow(', $filterStart)
+if ($filterStart -lt 0 -or $filterEnd -lt 0) { throw 'Missing GG green-run filter.' }
+$greenTests = [IO.File]::ReadAllText((Join-Path $SourceRoot 'green_signal_tests.cs.txt'))
+$greenTests = $greenTests.Replace('/* GREEN FILTER */', $ggText.Substring($filterStart, $filterEnd - $filterStart))
+Add-Type -TypeDefinition $greenTests
+[GreenSignalTests]::Run()
+
 # This checks API signatures without loading NinjaTrader or starting a strategy.
 $ntBin = 'C:\Program Files\NinjaTrader 8\bin'
 $framework = 'C:\Windows\Microsoft.NET\Framework64\v4.0.30319'
@@ -61,6 +94,6 @@ try {
         $errors | Select-Object -First 15 | ForEach-Object { Write-Host $_.ToString() }
         throw 'Complete NT8 strategy compilation failed.'
     }
-    Write-Host 'Both complete strategies compiled against installed NT8 assemblies.'
+    Write-Host "All $($sources.Count) complete strategies compiled against installed NT8 assemblies."
 }
 finally { $stream.Dispose() }

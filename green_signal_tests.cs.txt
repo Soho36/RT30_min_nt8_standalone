@@ -1,0 +1,39 @@
+using System;
+public class GreenSignalHarness
+{
+    public int MaxGreenRun;
+    public int CurrentBar;
+    public double[] Close;
+    public double[] Open;
+    /* GREEN FILTER */
+    public bool Rejected(int cap, params double[] closes)
+    {
+        MaxGreenRun = cap;
+        Close = closes;
+        Open = new double[closes.Length];
+        for (int i = 0; i < Open.Length; i++) Open[i] = 1;
+        CurrentBar = closes.Length - 1;
+        return ExceedsMaxGreenRun();
+    }
+}
+public static class GreenSignalTests
+{
+    private static void Check(bool condition, string label)
+    {
+        if (!condition) throw new Exception(label);
+        Console.WriteLine("PASS " + label);
+    }
+    public static void Run()
+    {
+        var h = new GreenSignalHarness();
+        Check(!h.Rejected(0, 2, 2, 2, 2, 2), "Green-run cap disabled by default");
+        Check(!h.Rejected(3, 2, 2, 2), "Exactly three greens allowed with cap three");
+        Check(h.Rejected(3, 2, 2, 2, 2), "Fourth green rejected with cap three");
+        Check(h.Rejected(1, 2, 2), "Signal candle included in green-run count");
+        Check(!h.Rejected(2, 2, 2, 0, 2, 2), "Red candle breaks green run");
+        Check(!h.Rejected(2, 2, 2, 1, 2, 2), "Doji breaks green run");
+        Check(!h.Rejected(1, 0, 2, 2, 2), "Red signal does not count older greens");
+        Check(!h.Rejected(1, 1, 2, 2, 2), "Doji signal does not count older greens");
+        Check(h.Rejected(3, 2, 2, 2, 2, 2, 2), "Loaded history contributes to green run");
+    }
+}
