@@ -14,6 +14,10 @@ namespace NinjaTrader.NinjaScript.Strategies
 {
     public class RRLongTimeWinStopLimitTPlimitGAPWindowRROffsetsSafeExitsMaxRedRun : Strategy
     {
+        // Bump on every behaviour change; printed at startup and shown as the
+        // strategy description, so the Output window shows which build is running.
+        private const string ScriptVersion = "2026.10.22";
+
         private Order longOrder;
         private Order entryTimeoutOrder;
         private DateTime entryTriggeredAt = Core.Globals.MinDate;
@@ -43,6 +47,9 @@ namespace NinjaTrader.NinjaScript.Strategies
         private DateTime lastFlattenDate = Core.Globals.MinDate;
         private bool lastWindowState = false;
         private SessionIterator sessionIterator;
+        // Bar whose signal priced the working entry order; drives EntryExpiryBars.
+        private int entryOrderBar = -1;
+        private DateTime entryOrderBarTime = Core.Globals.MinDate;
 
         // Derived signal names — all unique per instance to prevent cross-instance interference
         private string EntrySignalName    => $"Long1_{InstanceId}";
@@ -78,6 +85,12 @@ namespace NinjaTrader.NinjaScript.Strategies
         [Display(Name = "MaxRedRun (0 = off)", Order = 0, GroupName = "Entry Filters",
                  Description = "Maximum consecutive red candles ending at the signal, including the signal. 0 disables the cap. Green/doji bars break the run. Rejected red signals cancel the pending entry.")]
         public int MaxRedRun { get; set; }
+
+        [NinjaScriptProperty]
+        [Range(0, int.MaxValue)]
+        [Display(Name = "Entry expiry (bars, 0 = off)", Order = 1, GroupName = "Entry Filters",
+                 Description = "Cancel a pending entry whose buy stop was not reached within this many bars after its signal. A new signal that re-prices the entry restarts the count. A reached but unfilled entry keeps the 25-minute timeout.")]
+        public int EntryExpiryBars { get; set; }
 
         // ===== RISK/REWARD BY TIME WINDOW =====
         [NinjaScriptProperty]
@@ -334,6 +347,7 @@ namespace NinjaTrader.NinjaScript.Strategies
             if (State == State.SetDefaults)
             {
                 Name = "RRLongTimeWinStopLimitTPlimitGAPWindowRROffsetsSafeExitsMaxRedRun";
+                Description = "Version " + ScriptVersion;
                 Calculate = Calculate.OnBarClose;
                 EntriesPerDirection = 1;
                 EntryHandling = EntryHandling.UniqueEntries;
@@ -348,6 +362,7 @@ namespace NinjaTrader.NinjaScript.Strategies
                 CustomQuantity = 1;
                 ExitOffset = 0;
                 MaxRedRun = 0; // Disabled by default, matching the MT5 variant.
+                EntryExpiryBars = 0; // Off by default: untriggered entries stay working.
                 UseTradeWindow = true;
                 RR00 = RR01 = RR02 = RR03 = RR04 = RR05 = 0.0;
                 RR06 = RR07 = RR08 = RR09 = RR10 = RR11 = 0.0;
@@ -390,7 +405,7 @@ namespace NinjaTrader.NinjaScript.Strategies
                 pendingRiskReward = 0;
                 positionRiskReward = 0;
                 ResetExitTracking();
-                Print($"=== Strategy entering REALTIME mode (Instance {InstanceId}, signal={EntrySignalName}) ===");
+                Print($"=== Strategy entering REALTIME mode (Instance {InstanceId}, signal={EntrySignalName}, version {ScriptVersion}) ===");
                 StartStopFallbackTimer();
             }
             else if (State == State.Terminated)
@@ -800,6 +815,25 @@ namespace NinjaTrader.NinjaScript.Strategies
             return Bars != null && Bars.Count > next ? Bars.GetHigh(next) : double.NaN;
         }
 
+        // Cancels the working entry when its buy stop was not reached within
+        // EntryExpiryBars bars after the signal that priced it. A reached stop is
+        // left to the 25-minute entry timeout.
+        private void CancelExpiredEntry()
+        {
+            if (EntryExpiryBars <= 0 || entryOrderBar < 0 || !IsActiveOrder(longOrder)
+                || CurrentBar - entryOrderBar < EntryExpiryBars || longOrder.Filled > 0
+                || longOrder.OrderState == OrderState.CancelPending
+                || longOrder.OrderState == OrderState.CancelSubmitted)
+                return;
+            lock (exitOrdersSync)
+                if (entryTriggeredAt != Core.Globals.MinDate)
+                    return;
+
+            Print($"[{Time[0]}] [{EntrySignalName}] ⏱ Entry from {entryOrderBarTime} not triggered within "
+                + $"{EntryExpiryBars} bars → cancelling pending order @ {longOrder.StopPrice}");
+            CancelOrder(longOrder);
+        }
+
         private bool IsActiveOrder(Order order)
         {
             return order != null &&
@@ -979,13 +1013,21 @@ namespace NinjaTrader.NinjaScript.Strategies
 				{
 					Print($"[{Time[0]}] [{EntrySignalName}] ⚠️ Gap above entry → skipping stop placement "
 						+ $"(entry={entryPrice}, ask={ask}, next bar high={nextBarHigh})");
+					CancelExpiredEntry();
 					return;
 				}
 
 				ResetExitTracking();
 				longOrder = EnterLongStopLimit(0, true, EntryQuantity, entryPrice, entryPrice, EntrySignalName);
 				Print($"[{Time[0]}] [{EntrySignalName}] Submitted BUY STOP-LIMIT @ {entryPrice}");
+				if (longOrder != null)
+				{
+					entryOrderBar = CurrentBar;
+					entryOrderBarTime = Time[0];
+				}
 			}
+
+            CancelExpiredEntry();
         }
 
 		/// STOP-LOSS ORDERS BLOCK
