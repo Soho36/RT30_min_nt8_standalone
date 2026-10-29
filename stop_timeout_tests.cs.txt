@@ -60,6 +60,8 @@ public class TimeoutHarness
         stopOrders.Add(Stop);
     }
     private void Print(string text) { }
+    // The routed strategy's timer also sends its router heartbeat; not modelled here.
+    private void PublishRouterHeartbeat() { }
     private void TriggerCustomEvent(Action<object> callback, object state)
     {
         if (DeferEvent) QueuedEvent = callback;
